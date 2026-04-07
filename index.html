@@ -46,15 +46,76 @@
       </header>
 
       <nav class="feature-tabs" aria-label="Features">
-        <button class="feature-tab is-active" type="button" data-tab="flashcards">Flashcards</button>
+        <button class="feature-tab is-active" type="button" data-tab="intro">Intro</button>
+        <button class="feature-tab" type="button" data-tab="flashcards">Flashcards</button>
         <button class="feature-tab" type="button" data-tab="library">Library</button>
         <button class="feature-tab" type="button" data-tab="grammar">Grammar</button>
+        <button class="feature-tab" type="button" data-tab="decks">Decks</button>
         <button class="feature-tab" type="button" data-tab="statistics">Statistics</button>
         <button class="feature-tab" type="button" data-tab="settings">Settings</button>
       </nav>
 
       <main class="tab-panels">
-        <section class="tab-panel is-active" data-panel="flashcards">
+        <section class="tab-panel is-active" data-panel="intro">
+          <section class="panel intro-shell">
+            <div class="intro-hero">
+              <div>
+                <p class="panel-kicker">Welcome</p>
+                <h2>Kapp is a personal language-learning workspace.</h2>
+                <p class="intro-copy">
+                  Build decks, write grammar pages, import reading texts, and track your progress language by language.
+                </p>
+              </div>
+              <div class="intro-highlight">
+                <strong>Start with one target language.</strong>
+                <span>Everything in the app filters to the language selected at the top.</span>
+              </div>
+            </div>
+
+            <div class="intro-grid">
+              <article class="intro-card">
+                <p class="panel-kicker">Flashcards</p>
+                <h3>Study actively</h3>
+                <p>Use flashcards, multiple choice, and typing. Cards can go both directions and track accuracy over time.</p>
+              </article>
+
+              <article class="intro-card">
+                <p class="panel-kicker">Grammar</p>
+                <h3>Write reference pages</h3>
+                <p>Create grammar points with nested sections, examples, exercises, videos, colors, and links from cards or texts.</p>
+              </article>
+
+              <article class="intro-card">
+                <p class="panel-kicker">Library</p>
+                <h3>Read real texts</h3>
+                <p>Import stories, dialogues, or notes, read them in chunks, and pull words or sentences into decks.</p>
+              </article>
+
+              <article class="intro-card">
+                <p class="panel-kicker">Statistics</p>
+                <h3>Measure progress</h3>
+                <p>See current-language mastery, deck progress, card performance, and export or import your full data bundle.</p>
+              </article>
+            </div>
+
+            <div class="intro-steps">
+              <div class="intro-step">
+                <strong>1. Choose a language</strong>
+                <span>Add a target language in the header.</span>
+              </div>
+              <div class="intro-step">
+                <strong>2. Create content</strong>
+                <span>Make decks, grammar notes, or reading texts.</span>
+              </div>
+              <div class="intro-step">
+                <strong>3. Study and review</strong>
+                <span>Use the study modes and let the app track what you know.</span>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <section class="tab-panel" data-panel="flashcards">
           <section class="study-stage panel">
             <div class="study-topbar">
               <div>
@@ -68,11 +129,7 @@
                 </label>
                 <label>
                   Goal
-                  <select id="session-goal">
-                    <option value="10">10 cards</option>
-                    <option value="20">20 cards</option>
-                    <option value="9999">Whole deck</option>
-                  </select>
+                  <input id="session-goal" type="number" min="1" step="1" value="10" placeholder="10" />
                 </label>
                 <button class="secondary" id="restart-session" type="button">Restart session</button>
               </div>
@@ -285,9 +342,6 @@
             <div class="library-page-view hidden" id="library-page-view">
               <div class="library-reader-meta" id="library-reader-meta"></div>
               <div class="library-reading-progress hidden" id="library-reading-progress"></div>
-              <article class="library-reader-content" id="library-reader-content">
-                <p class="list-meta">Import or select a text to start reading.</p>
-              </article>
               <section class="panel library-capture-panel">
                 <div class="panel-header">
                   <div>
@@ -330,6 +384,9 @@
                   </form>
                 </div>
               </section>
+              <article class="library-reader-content" id="library-reader-content">
+                <p class="list-meta">Import or select a text to start reading.</p>
+              </article>
               <div class="recording-actions hidden" id="library-reader-actions">
                 <button class="secondary" id="library-previous-chunk" type="button">Previous</button>
                 <button class="primary" id="library-next-chunk" type="button">Next</button>
@@ -435,15 +492,16 @@
               </div>
               <div class="mini-list" id="card-stat-list"></div>
             </section>
+
           </div>
         </section>
 
-        <section class="tab-panel" data-panel="settings">
+        <section class="tab-panel" data-panel="decks">
           <div class="settings-layout">
             <section class="panel">
               <div class="panel-header">
                 <div>
-                  <p class="panel-kicker">Settings</p>
+                  <p class="panel-kicker">Decks</p>
                   <h2>Decks</h2>
                 </div>
                 <p class="list-meta" id="deck-count">0 decks</p>
@@ -456,32 +514,12 @@
                 <button class="primary" type="submit">Create deck</button>
               </form>
               <div id="deck-summary" class="deck-summary"></div>
-
-              <div class="recording-panel">
-                <div class="panel-header">
-                  <div>
-                    <p class="panel-kicker">Data</p>
-                    <h2>Export And Import</h2>
-                  </div>
-                </div>
-                <p class="field-help" id="data-transfer-status">Export your app as a JSON file, or import a shared bundle to replace local data.</p>
-                <div class="recording-actions">
-                  <button class="secondary" id="export-app-data" type="button">Export data</button>
-                </div>
-                <form id="import-app-data-form" class="settings-form">
-                  <label>
-                    Import bundle
-                    <input id="import-app-data-file" name="appDataFile" type="file" accept="application/json,.json" required />
-                  </label>
-                  <button class="primary" id="import-app-data-button" type="submit">Import data</button>
-                </form>
-              </div>
             </section>
 
             <section class="panel deck-workspace">
               <div class="panel-header">
                 <div>
-                  <p class="panel-kicker">Settings</p>
+                  <p class="panel-kicker">Decks</p>
                   <h2 id="settings-deck-title">Deck workspace</h2>
                 </div>
                 <div class="recording-actions">
@@ -589,6 +627,69 @@
               </form>
             </section>
           </div>
+        </section>
+
+        <section class="tab-panel" data-panel="settings">
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="panel-kicker">Settings</p>
+                <h2>App Settings</h2>
+              </div>
+            </div>
+            <form id="theme-settings-form" class="settings-form">
+              <label>
+                Theme
+                <select id="theme-select" name="theme">
+                  <option value="sand">Sand</option>
+                  <option value="forest">Forest</option>
+                  <option value="paper">Paper</option>
+                  <option value="night">Midnight Ink</option>
+                </select>
+              </label>
+            </form>
+
+            <p class="field-help" id="data-transfer-status">Export selected content as JSON, or import a shared bundle and merge it into local data.</p>
+            <form id="export-app-data-form" class="settings-form">
+              <label>
+                Language to export
+                <select id="export-language-select" name="exportLanguage"></select>
+              </label>
+              <div class="structured-options">
+                <label class="option-row">
+                  <input id="export-flashcards" name="includeFlashcards" type="checkbox" checked />
+                  <span>Decks and flashcards</span>
+                </label>
+                <label class="option-row">
+                  <input id="export-grammar" name="includeGrammar" type="checkbox" checked />
+                  <span>Grammar points</span>
+                </label>
+                <label class="option-row">
+                  <input id="export-library" name="includeLibrary" type="checkbox" checked />
+                  <span>Library texts</span>
+                </label>
+              </div>
+              <button class="secondary" id="export-app-data" type="submit">Export data</button>
+            </form>
+            <form id="import-app-data-form" class="settings-form">
+              <label>
+                Import bundle
+                <input id="import-app-data-file" name="appDataFile" type="file" accept="application/json,.json" required />
+              </label>
+              <button class="primary" id="import-app-data-button" type="submit">Import data</button>
+            </form>
+
+            <div class="recording-panel danger-panel">
+              <div class="panel-header">
+                <div>
+                  <p class="panel-kicker">Danger Zone</p>
+                  <h2>Reset Local Data</h2>
+                </div>
+              </div>
+              <p class="field-help">This clears flashcards, grammar points, texts, settings, and all local progress on this device.</p>
+              <button class="ghost" id="clear-local-data" type="button">Clear all local data</button>
+            </div>
+          </section>
         </section>
       </main>
     </div>

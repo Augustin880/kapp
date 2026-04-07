@@ -150,15 +150,42 @@ function hydrateLibraryText(entry) {
   };
 }
 
-function buildExportBundle(state) {
+function buildExportBundle(state, options) {
+  const includeFlashcards = Boolean(options?.includeFlashcards);
+  const includeGrammar = Boolean(options?.includeGrammar);
+  const includeLibrary = Boolean(options?.includeLibrary);
+  const exportLanguage = options?.language?.trim() || "";
+  const flashcards = includeFlashcards ? state.flashcards.filter((card) => card.language === exportLanguage) : [];
+  const grammarPoints = includeGrammar
+    ? state.grammarPoints.filter((point) => point.language === exportLanguage)
+    : [];
+  const libraryTexts = includeLibrary
+    ? state.libraryTexts.filter((entry) => entry.language === exportLanguage)
+    : [];
+
   return {
     app: "kapp",
     version: 1,
     exportedAt: new Date().toISOString(),
-    settings: state.settings,
-    flashcards: state.flashcards,
-    grammarPoints: state.grammarPoints,
-    libraryTexts: state.libraryTexts,
+    settings: {
+      targetLanguage: exportLanguage,
+      customLanguages: exportLanguage ? [exportLanguage] : [],
+      customDecks: includeFlashcards
+        ? state.settings.customDecks.filter((deck) => deck.language === exportLanguage)
+        : [],
+    },
+    flashcards: flashcards.map((card) => ({
+          ...card,
+          score: 0,
+          stats: createEmptyStats(),
+        })),
+    grammarPoints,
+    libraryTexts: libraryTexts.map((entry) => ({
+          ...entry,
+          status: "unread",
+          progress: 0,
+          currentChunk: 0,
+        })),
   };
 }
 
@@ -183,6 +210,18 @@ function hydrateImportBundle(bundle) {
     grammarPoints: Array.isArray(bundle.grammarPoints) ? bundle.grammarPoints.map(hydrateGrammarPoint) : [],
     libraryTexts: Array.isArray(bundle.libraryTexts) ? bundle.libraryTexts.map(hydrateLibraryText) : [],
   };
+}
+
+function getDeckConflictKey(entry) {
+  return `${entry.language}::${entry.name}`;
+}
+
+function getGrammarConflictKey(point) {
+  return `${point.language}::${point.title.trim().toLowerCase()}`;
+}
+
+function getLibraryConflictKey(entry) {
+  return `${entry.language}::${entry.title.trim().toLowerCase()}`;
 }
 
 function isBrowserRuntime() {
@@ -435,7 +474,7 @@ if (!isBrowserRuntime()) {
   }
 
   const state = {
-    activeTab: "flashcards",
+    activeTab: "intro",
     settings: loadSettings(),
     flashcards: loadFlashcards(),
     libraryTexts: loadLibraryTexts(),
@@ -445,6 +484,11 @@ if (!isBrowserRuntime()) {
     selectedSettingsDeck: "",
     currentIndex: 0,
     flipped: false,
+    cardSwipePointerId: null,
+    cardSwipeStartX: 0,
+    cardSwipeDeltaX: 0,
+    cardSwipeActive: false,
+    suppressCardClick: false,
     importedAudio: "",
     editingCardId: "",
     grammarPoints: loadGrammarPoints(),
@@ -600,10 +644,18 @@ if (!isBrowserRuntime()) {
     deckSummary: document.querySelector("#deck-summary"),
     deckCount: document.querySelector("#deck-count"),
     dataTransferStatus: document.querySelector("#data-transfer-status"),
+    exportAppDataForm: document.querySelector("#export-app-data-form"),
+    exportLanguageSelect: document.querySelector("#export-language-select"),
+    exportFlashcards: document.querySelector("#export-flashcards"),
+    exportGrammar: document.querySelector("#export-grammar"),
+    exportLibrary: document.querySelector("#export-library"),
     exportAppData: document.querySelector("#export-app-data"),
     importAppDataForm: document.querySelector("#import-app-data-form"),
     importAppDataFile: document.querySelector("#import-app-data-file"),
     importAppDataButton: document.querySelector("#import-app-data-button"),
+    themeSettingsForm: document.querySelector("#theme-settings-form"),
+    themeSelect: document.querySelector("#theme-select"),
+    clearLocalData: document.querySelector("#clear-local-data"),
     createDeckForm: document.querySelector("#create-deck-form"),
     settingsDeckTitle: document.querySelector("#settings-deck-title"),
     selectedDeckMeta: document.querySelector("#selected-deck-meta"),
@@ -672,7 +724,7 @@ if (!isBrowserRuntime()) {
   function loadSettings() {
     const stored = localStorage.getItem(SETTINGS_KEY);
     if (!stored) {
-      return { targetLanguage: "", customLanguages: [], customDecks: [] };
+      return { targetLanguage: "", customLanguages: [], customDecks: [], theme: "sand" };
     }
 
     try {
@@ -687,9 +739,10 @@ if (!isBrowserRuntime()) {
               .filter((deck) => deck && typeof deck.language === "string" && typeof deck.name === "string")
               .map((deck) => ({ language: deck.language, name: deck.name }))
           : [],
+        theme: typeof parsed.theme === "string" ? parsed.theme : "sand",
       };
     } catch {
-      return { targetLanguage: "", customLanguages: [], customDecks: [] };
+      return { targetLanguage: "", customLanguages: [], customDecks: [], theme: "sand" };
     }
   }
 
@@ -712,8 +765,16 @@ if (!isBrowserRuntime()) {
         targetLanguage: state.targetLanguage,
         customLanguages: state.settings.customLanguages,
         customDecks: state.settings.customDecks,
+        theme: state.settings.theme,
       }),
     );
+  }
+
+  function applyTheme() {
+    document.body.dataset.theme = state.settings.theme || "sand";
+    if (elements.themeSelect) {
+      elements.themeSelect.value = state.settings.theme || "sand";
+    }
   }
 
   function getLanguages() {
@@ -978,6 +1039,13 @@ if (!isBrowserRuntime()) {
     elements.typingForm?.reset();
   }
 
+  function resetCardSwipeState() {
+    state.cardSwipePointerId = null;
+    state.cardSwipeStartX = 0;
+    state.cardSwipeDeltaX = 0;
+    state.cardSwipeActive = false;
+  }
+
   function finalizePendingTypingReview(isCorrect) {
     if (!state.pendingTypingReviewCardId) {
       return;
@@ -989,6 +1057,7 @@ if (!isBrowserRuntime()) {
 
   function resetSession() {
     cancelPendingAdvance();
+    resetCardSwipeState();
     state.currentIndex = 0;
     state.flipped = false;
     randomizeSessionCardOrder();
@@ -1623,25 +1692,34 @@ if (!isBrowserRuntime()) {
 
   function renderFlashcard() {
     const currentCard = getCurrentCard();
+    const swipeRotation = Math.max(-12, Math.min(12, state.cardSwipeDeltaX / 18));
 
     if (!state.targetLanguage) {
+      resetCardSwipeState();
       elements.cardFrontText.textContent = "Set a target language.";
       elements.cardFrontMeta.textContent = "This applies to the whole app, not just flashcards.";
       elements.cardBackText.textContent = "Once a language is set, you can study, practice, and track progress.";
       elements.cardBackMeta.textContent = "";
       elements.playAudio.disabled = true;
       elements.card.classList.remove("is-flipped");
+      elements.card.classList.remove("is-dragging");
+      elements.card.style.removeProperty("--swipe-x");
+      elements.card.style.removeProperty("--swipe-tilt");
       elements.card.disabled = true;
       return;
     }
 
     if (!currentCard) {
+      resetCardSwipeState();
       elements.cardFrontText.textContent = `No flashcards for ${state.targetLanguage} yet.`;
       elements.cardFrontMeta.textContent = "Add cards in Settings and come back to start an immersive session.";
       elements.cardBackText.textContent = "Statistics will appear after you start practicing.";
       elements.cardBackMeta.textContent = "";
       elements.playAudio.disabled = true;
       elements.card.classList.remove("is-flipped");
+      elements.card.classList.remove("is-dragging");
+      elements.card.style.removeProperty("--swipe-x");
+      elements.card.style.removeProperty("--swipe-tilt");
       elements.card.disabled = true;
       return;
     }
@@ -1662,6 +1740,9 @@ if (!isBrowserRuntime()) {
     elements.playAudio.disabled = !currentCard.audio && !stripAnnotationMarkup(studyContent.prompt).trim();
     elements.card.disabled = state.isAdvancing || state.studyMode !== "flashcards";
     elements.card.classList.toggle("is-flipped", state.flipped);
+    elements.card.classList.toggle("is-dragging", state.cardSwipeActive);
+    elements.card.style.setProperty("--swipe-x", `${state.cardSwipeDeltaX}px`);
+    elements.card.style.setProperty("--swipe-tilt", `${swipeRotation}deg`);
   }
 
   function renderSessionEnd() {
@@ -1921,6 +2002,18 @@ if (!isBrowserRuntime()) {
   function renderStatistics() {
     renderStatisticsViewTabs();
     const currentLanguageCards = getCardsForTargetLanguage();
+    const exportLanguages = getLanguages();
+    const selectedExportLanguage =
+      exportLanguages.includes(elements.exportLanguageSelect.value) ? elements.exportLanguageSelect.value : state.targetLanguage;
+    elements.exportLanguageSelect.innerHTML = exportLanguages.length
+      ? exportLanguages
+          .map(
+            (language) =>
+              `<option value="${escapeHtml(language)}" ${language === selectedExportLanguage ? "selected" : ""}>${escapeHtml(language)}</option>`,
+          )
+          .join("")
+      : `<option value="">No languages available</option>`;
+    elements.exportLanguageSelect.disabled = exportLanguages.length === 0;
     const studied = currentLanguageCards.filter((card) => card.stats.attempts > 0).length;
     const known = currentLanguageCards.filter(isKnownCard).length;
     const attempts = currentLanguageCards.reduce((sum, card) => sum + card.stats.attempts, 0);
@@ -2430,6 +2523,7 @@ if (!isBrowserRuntime()) {
   }
 
   function render() {
+    applyTheme();
     renderHeroStats();
     renderLanguageTabs();
     renderTabs();
@@ -2454,6 +2548,7 @@ if (!isBrowserRuntime()) {
       return;
     }
 
+    resetCardSwipeState();
     finalizePendingTypingReview(false);
     if (state.sessionComplete) {
       clearStudyAnswerState();
@@ -2599,10 +2694,94 @@ if (!isBrowserRuntime()) {
     stopEditingGrammarPoint();
     stopEditingLibraryText();
 
-    state.settings = bundle.settings;
-    state.flashcards = bundle.flashcards;
-    state.grammarPoints = bundle.grammarPoints;
-    state.libraryTexts = bundle.libraryTexts;
+    const nextSettings = {
+      targetLanguage: state.settings.targetLanguage || bundle.settings.targetLanguage,
+      customLanguages: [...new Set([...state.settings.customLanguages, ...bundle.settings.customLanguages])].sort((left, right) =>
+        left.localeCompare(right),
+      ),
+      customDecks: [...state.settings.customDecks],
+    };
+
+    let nextFlashcards = [...state.flashcards];
+    const currentDeckKeys = new Set(state.settings.customDecks.map(getDeckConflictKey));
+    state.flashcards.forEach((card) => currentDeckKeys.add(getDeckConflictKey({ language: card.language, name: card.deck })));
+
+    const importedDeckMap = new Map();
+    bundle.flashcards.forEach((card) => {
+      const key = getDeckConflictKey({ language: card.language, name: card.deck });
+      if (!importedDeckMap.has(key)) {
+        importedDeckMap.set(key, []);
+      }
+      importedDeckMap.get(key).push(card);
+    });
+    bundle.settings.customDecks.forEach((deck) => {
+      const key = getDeckConflictKey(deck);
+      if (!importedDeckMap.has(key)) {
+        importedDeckMap.set(key, []);
+      }
+    });
+
+    importedDeckMap.forEach((cards, key) => {
+      const [language, deckName] = key.split("::");
+      const currentHasDeck = currentDeckKeys.has(key);
+      const keepImported = !currentHasDeck
+        ? true
+        : window.confirm(`Deck "${deckName}" already exists in ${language}. Press OK to keep the imported deck and cards, or Cancel to keep your current deck.`);
+
+      if (!keepImported) {
+        return;
+      }
+
+      nextFlashcards = nextFlashcards.filter((card) => !(card.language === language && card.deck === deckName));
+      nextFlashcards = [...cards, ...nextFlashcards];
+      nextSettings.customDecks = [
+        ...nextSettings.customDecks.filter((deck) => !(deck.language === language && deck.name === deckName)),
+        { language, name: deckName },
+      ];
+    });
+
+    let nextGrammarPoints = [...state.grammarPoints];
+    bundle.grammarPoints.forEach((point) => {
+      const conflictKey = getGrammarConflictKey(point);
+      const currentConflict = nextGrammarPoints.find((entry) => getGrammarConflictKey(entry) === conflictKey);
+      if (!currentConflict) {
+        nextGrammarPoints = [point, ...nextGrammarPoints];
+        return;
+      }
+
+      const keepImported = window.confirm(
+        `Grammar point "${point.title}" already exists in ${point.language}. Press OK to keep the imported version, or Cancel to keep your current one.`,
+      );
+      if (!keepImported) {
+        return;
+      }
+
+      nextGrammarPoints = [point, ...nextGrammarPoints.filter((entry) => getGrammarConflictKey(entry) !== conflictKey)];
+    });
+
+    let nextLibraryTexts = [...state.libraryTexts];
+    bundle.libraryTexts.forEach((entry) => {
+      const conflictKey = getLibraryConflictKey(entry);
+      const currentConflict = nextLibraryTexts.find((item) => getLibraryConflictKey(item) === conflictKey);
+      if (!currentConflict) {
+        nextLibraryTexts = [entry, ...nextLibraryTexts];
+        return;
+      }
+
+      const keepImported = window.confirm(
+        `Text "${entry.title}" already exists in ${entry.language}. Press OK to keep the imported version, or Cancel to keep your current one.`,
+      );
+      if (!keepImported) {
+        return;
+      }
+
+      nextLibraryTexts = [entry, ...nextLibraryTexts.filter((item) => getLibraryConflictKey(item) !== conflictKey)];
+    });
+
+    state.settings = nextSettings;
+    state.flashcards = nextFlashcards;
+    state.grammarPoints = nextGrammarPoints;
+    state.libraryTexts = nextLibraryTexts;
     state.targetLanguage = state.settings.targetLanguage;
     state.activeDeck = ALL_DECKS;
     state.activeGrammarId = "";
@@ -2673,8 +2852,26 @@ if (!isBrowserRuntime()) {
     render();
   });
 
-  elements.exportAppData.addEventListener("click", () => {
-    const bundle = buildExportBundle(state);
+  elements.exportAppDataForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const exportLanguage = elements.exportLanguageSelect.value.trim();
+    if (!exportLanguage) {
+      elements.dataTransferStatus.textContent = "Choose one language to export.";
+      return;
+    }
+
+    const bundle = buildExportBundle(state, {
+      language: exportLanguage,
+      includeFlashcards: elements.exportFlashcards.checked,
+      includeGrammar: elements.exportGrammar.checked,
+      includeLibrary: elements.exportLibrary.checked,
+    });
+
+    if (bundle.flashcards.length === 0 && bundle.grammarPoints.length === 0 && bundle.libraryTexts.length === 0) {
+      elements.dataTransferStatus.textContent = "Choose at least one content type to export.";
+      return;
+    }
+
     const file = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(file);
     const timestamp = new Date().toISOString().slice(0, 10);
@@ -2683,7 +2880,14 @@ if (!isBrowserRuntime()) {
     anchor.download = `kapp-data-${timestamp}.json`;
     anchor.click();
     URL.revokeObjectURL(url);
-    elements.dataTransferStatus.textContent = "Data exported as a JSON bundle.";
+    elements.dataTransferStatus.textContent = "Selected data exported as a JSON bundle.";
+  });
+
+  elements.themeSettingsForm.addEventListener("change", (event) => {
+    const nextTheme = new FormData(event.currentTarget).get("theme").toString();
+    state.settings.theme = nextTheme || "sand";
+    persistSettings();
+    applyTheme();
   });
 
   elements.importAppDataForm.addEventListener("submit", async (event) => {
@@ -2693,7 +2897,7 @@ if (!isBrowserRuntime()) {
       return;
     }
 
-    if (!window.confirm("Importing will replace the local app data on this device. Continue?")) {
+    if (!window.confirm("Importing will merge this bundle into the local app data. Conflicts will ask which version to keep. Continue?")) {
       return;
     }
 
@@ -2710,6 +2914,18 @@ if (!isBrowserRuntime()) {
     } finally {
       elements.importAppDataButton.disabled = false;
     }
+  });
+
+  elements.clearLocalData.addEventListener("click", () => {
+    if (!window.confirm("Clear all local Kapp data on this device? This cannot be undone.")) {
+      return;
+    }
+
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(GRAMMAR_STORAGE_KEY);
+    localStorage.removeItem(LIBRARY_STORAGE_KEY);
+    localStorage.removeItem(SETTINGS_KEY);
+    window.location.reload();
   });
 
   elements.featureTabs.forEach((tab) => {
@@ -2754,7 +2970,9 @@ if (!isBrowserRuntime()) {
   });
 
   elements.sessionGoal.addEventListener("change", (event) => {
-    state.sessionGoal = Number(event.target.value);
+    const nextGoal = Math.max(1, Number(event.target.value) || 1);
+    state.sessionGoal = nextGoal;
+    event.target.value = String(nextGoal);
     resetSession();
     render();
   });
@@ -3219,8 +3437,77 @@ if (!isBrowserRuntime()) {
     render();
   });
 
+  elements.card.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0 || event.target.closest(".grammar-inline-link")) {
+      return;
+    }
+    if (state.sessionComplete || state.isAdvancing || state.studyMode !== "flashcards") {
+      return;
+    }
+
+    state.cardSwipePointerId = event.pointerId;
+    state.cardSwipeStartX = event.clientX;
+    state.cardSwipeDeltaX = 0;
+    state.cardSwipeActive = false;
+    state.suppressCardClick = false;
+    elements.card.setPointerCapture?.(event.pointerId);
+  });
+
+  elements.card.addEventListener("pointermove", (event) => {
+    if (state.cardSwipePointerId !== event.pointerId || state.sessionComplete || state.isAdvancing || state.studyMode !== "flashcards") {
+      return;
+    }
+
+    state.cardSwipeDeltaX = event.clientX - state.cardSwipeStartX;
+    if (Math.abs(state.cardSwipeDeltaX) > 8) {
+      state.cardSwipeActive = true;
+      state.suppressCardClick = true;
+      event.preventDefault();
+    }
+    renderFlashcard();
+  });
+
+  elements.card.addEventListener("pointerup", (event) => {
+    if (state.cardSwipePointerId !== event.pointerId) {
+      return;
+    }
+
+    elements.card.releasePointerCapture?.(event.pointerId);
+    const finalDelta = state.cardSwipeDeltaX;
+    const crossedThreshold = Math.abs(finalDelta) >= 110;
+    resetCardSwipeState();
+    renderFlashcard();
+
+    if (crossedThreshold) {
+      state.suppressCardClick = true;
+      if (finalDelta > 0) {
+        updateFlashcardScore(2, true);
+      } else {
+        updateFlashcardScore(-1, false);
+      }
+      window.setTimeout(() => {
+        state.suppressCardClick = false;
+      }, 180);
+      return;
+    }
+
+    window.setTimeout(() => {
+      state.suppressCardClick = false;
+    }, 0);
+  });
+
+  elements.card.addEventListener("pointercancel", () => {
+    resetCardSwipeState();
+    renderFlashcard();
+    state.suppressCardClick = false;
+  });
+
   elements.card.addEventListener("click", (event) => {
     if (event.target.closest(".grammar-inline-link")) {
+      return;
+    }
+    if (state.suppressCardClick) {
+      event.preventDefault();
       return;
     }
     if (state.sessionComplete || state.isAdvancing || state.studyMode !== "flashcards") {
