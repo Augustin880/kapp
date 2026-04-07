@@ -155,12 +155,23 @@ function buildExportBundle(state, options) {
   const includeGrammar = Boolean(options?.includeGrammar);
   const includeLibrary = Boolean(options?.includeLibrary);
   const exportLanguage = options?.language?.trim() || "";
-  const flashcards = includeFlashcards ? state.flashcards.filter((card) => card.language === exportLanguage) : [];
+  const selectedDecks = Array.isArray(options?.selectedDecks) ? options.selectedDecks : [];
+  const selectedGrammarIds = Array.isArray(options?.selectedGrammarIds) ? options.selectedGrammarIds : [];
+  const selectedLibraryIds = Array.isArray(options?.selectedLibraryIds) ? options.selectedLibraryIds : [];
+  const flashcards = includeFlashcards
+    ? state.flashcards.filter(
+        (card) => card.language === exportLanguage && (selectedDecks.length === 0 || selectedDecks.includes(card.deck)),
+      )
+    : [];
   const grammarPoints = includeGrammar
-    ? state.grammarPoints.filter((point) => point.language === exportLanguage)
+    ? state.grammarPoints.filter(
+        (point) => point.language === exportLanguage && (selectedGrammarIds.length === 0 || selectedGrammarIds.includes(point.id)),
+      )
     : [];
   const libraryTexts = includeLibrary
-    ? state.libraryTexts.filter((entry) => entry.language === exportLanguage)
+    ? state.libraryTexts.filter(
+        (entry) => entry.language === exportLanguage && (selectedLibraryIds.length === 0 || selectedLibraryIds.includes(entry.id)),
+      )
     : [];
 
   return {
@@ -171,7 +182,9 @@ function buildExportBundle(state, options) {
       targetLanguage: exportLanguage,
       customLanguages: exportLanguage ? [exportLanguage] : [],
       customDecks: includeFlashcards
-        ? state.settings.customDecks.filter((deck) => deck.language === exportLanguage)
+        ? state.settings.customDecks.filter(
+            (deck) => deck.language === exportLanguage && (selectedDecks.length === 0 || selectedDecks.includes(deck.name)),
+          )
         : [],
     },
     flashcards: flashcards.map((card) => ({
@@ -229,6 +242,10 @@ function isBrowserRuntime() {
 }
 
 function normalizeText(value) {
+  return stripAnnotationMarkup(value).trim().toLowerCase();
+}
+
+function normalizeSearchText(value) {
   return stripAnnotationMarkup(value).trim().toLowerCase();
 }
 
@@ -464,6 +481,11 @@ function hydrateGrammarPoint(point) {
   };
 }
 
+function flattenGrammarBlockText(block) {
+  const childrenText = Array.isArray(block.children) ? block.children.map(flattenGrammarBlockText).join(" ") : "";
+  return [block.title, block.content, childrenText].filter(Boolean).join(" ");
+}
+
 if (!isBrowserRuntime()) {
   console.error("app.js is a browser entrypoint. Start the local server with: node server.js");
 } else {
@@ -497,7 +519,10 @@ if (!isBrowserRuntime()) {
     activeLibraryTextId: "",
     editingLibraryTextId: "",
     selectedLibrarySnippet: "",
-    libraryCaptureCollapsed: false,
+    libraryCaptureCollapsed: true,
+    grammarSearch: "",
+    librarySearch: "",
+    deckView: "library",
     grammarView: "library",
     libraryView: "list",
     draftGrammarSections: [],
@@ -507,8 +532,14 @@ if (!isBrowserRuntime()) {
     studyAnsweredCardId: "",
     typingAnswerPendingCardId: "",
     pendingTypingReviewCardId: "",
+    submittedTypingAnswers: [],
+    submittedTypingCorrect: false,
+    submittedMultipleChoiceAnswer: "",
+    submittedMultipleChoiceCorrect: false,
+    multipleChoiceOptionOrders: {},
     sessionGoal: 10,
     sessionReviewedIds: [],
+    sessionReviewLog: [],
     sessionAttempts: 0,
     sessionCorrect: 0,
     sessionComplete: false,
@@ -529,6 +560,7 @@ if (!isBrowserRuntime()) {
     libraryPanelTitle: document.querySelector("#library-panel-title"),
     libraryBrowserView: document.querySelector("#library-browser-view"),
     libraryPageView: document.querySelector("#library-page-view"),
+    libraryImportView: document.querySelector("#library-import-view"),
     libraryEditorView: document.querySelector("#library-editor-view"),
     grammarLibraryView: document.querySelector("#grammar-library-view"),
     grammarPageView: document.querySelector("#grammar-page-view"),
@@ -539,6 +571,7 @@ if (!isBrowserRuntime()) {
     grammarPage: document.querySelector("#grammar-page"),
     grammarList: document.querySelector("#grammar-list"),
     grammarCount: document.querySelector("#grammar-count"),
+    grammarSearchInput: document.querySelector("#grammar-search-input"),
     grammarForm: document.querySelector("#grammar-form"),
     editingGrammarNote: document.querySelector("#editing-grammar-note"),
     saveGrammarButton: document.querySelector("#save-grammar-button"),
@@ -551,6 +584,7 @@ if (!isBrowserRuntime()) {
     grammarSectionTemplate: document.querySelector("#grammar-section-editor-template"),
     libraryCount: document.querySelector("#library-count"),
     librarySummaryStats: document.querySelector("#library-summary-stats"),
+    librarySearchInput: document.querySelector("#library-search-input"),
     libraryImportForm: document.querySelector("#library-import-form"),
     libraryTitleInput: document.querySelector("#library-title-input"),
     libraryTagsInput: document.querySelector("#library-tags-input"),
@@ -562,6 +596,7 @@ if (!isBrowserRuntime()) {
     libraryList: document.querySelector("#library-list"),
     libraryReaderMeta: document.querySelector("#library-reader-meta"),
     libraryBackToList: document.querySelector("#library-back-to-list"),
+    libraryCreateNew: document.querySelector("#library-create-new"),
     editLibraryText: document.querySelector("#edit-library-text"),
     editingLibraryNote: document.querySelector("#editing-library-note"),
     libraryEditForm: document.querySelector("#library-edit-form"),
@@ -633,6 +668,7 @@ if (!isBrowserRuntime()) {
     typingCloze: document.querySelector("#typing-cloze"),
     typingAnswerLabel: document.querySelector("#typing-answer-label"),
     typingAnswerInput: document.querySelector("#typing-answer-input"),
+    typingInlineStatus: document.querySelector("#typing-inline-status"),
     acceptTypingAnswer: document.querySelector("#accept-typing-answer"),
     practiceFeedback: document.querySelector("#practice-feedback"),
     languageSummaryStats: document.querySelector("#language-summary-stats"),
@@ -641,6 +677,10 @@ if (!isBrowserRuntime()) {
     deckChart: document.querySelector("#deck-chart"),
     cardStatList: document.querySelector("#card-stat-list"),
     statisticsViewTabs: [...document.querySelectorAll("[data-stats-view]")],
+    decksPanelTitle: document.querySelector("#decks-panel-title"),
+    decksBackToLibrary: document.querySelector("#decks-back-to-library"),
+    deckLibraryView: document.querySelector("#deck-library-view"),
+    deckPageView: document.querySelector("#deck-page-view"),
     deckSummary: document.querySelector("#deck-summary"),
     deckCount: document.querySelector("#deck-count"),
     dataTransferStatus: document.querySelector("#data-transfer-status"),
@@ -649,6 +689,12 @@ if (!isBrowserRuntime()) {
     exportFlashcards: document.querySelector("#export-flashcards"),
     exportGrammar: document.querySelector("#export-grammar"),
     exportLibrary: document.querySelector("#export-library"),
+    exportFlashcardsPicker: document.querySelector("#export-flashcards-picker"),
+    exportGrammarPicker: document.querySelector("#export-grammar-picker"),
+    exportLibraryPicker: document.querySelector("#export-library-picker"),
+    exportDeckOptions: document.querySelector("#export-deck-options"),
+    exportGrammarOptions: document.querySelector("#export-grammar-options"),
+    exportLibraryOptions: document.querySelector("#export-library-options"),
     exportAppData: document.querySelector("#export-app-data"),
     importAppDataForm: document.querySelector("#import-app-data-form"),
     importAppDataFile: document.querySelector("#import-app-data-file"),
@@ -883,7 +929,7 @@ if (!isBrowserRuntime()) {
   }
 
   function isKnownCard(card) {
-    return card.stats.attempts >= 20 && getAccuracy(card) >= 98;
+    return card.stats.attempts >= 10 && getAccuracy(card) >= 90;
   }
 
   function getPracticeCards() {
@@ -1036,6 +1082,10 @@ if (!isBrowserRuntime()) {
     state.studyAnsweredCardId = "";
     state.typingAnswerPendingCardId = "";
     state.pendingTypingReviewCardId = "";
+    state.submittedTypingAnswers = [];
+    state.submittedTypingCorrect = false;
+    state.submittedMultipleChoiceAnswer = "";
+    state.submittedMultipleChoiceCorrect = false;
     elements.typingForm?.reset();
   }
 
@@ -1062,8 +1112,10 @@ if (!isBrowserRuntime()) {
     state.flipped = false;
     randomizeSessionCardOrder();
     state.sessionCardDirections = {};
+    state.multipleChoiceOptionOrders = {};
     clearStudyAnswerState();
     state.sessionReviewedIds = [];
+    state.sessionReviewLog = [];
     state.sessionAttempts = 0;
     state.sessionCorrect = 0;
     state.sessionComplete = false;
@@ -1089,6 +1141,7 @@ if (!isBrowserRuntime()) {
     if (!state.sessionReviewedIds.includes(cardId)) {
       state.sessionReviewedIds = [...state.sessionReviewedIds, cardId];
     }
+    state.sessionReviewLog = [...state.sessionReviewLog, { cardId, isCorrect }];
     state.sessionAttempts += 1;
     state.sessionCorrect += isCorrect ? 1 : 0;
     maybeCompleteSession();
@@ -1358,7 +1411,7 @@ if (!isBrowserRuntime()) {
     elements.cancelEditCard.classList.toggle("hidden", !isEditing);
     elements.editingCardNote.classList.toggle("hidden", !isEditing);
     elements.cardFormDeckLabel.textContent = state.selectedSettingsDeck
-      ? `Working in deck: ${state.selectedSettingsDeck}`
+      ? "Add or edit cards in this deck."
       : "Choose a deck before adding cards.";
     [...elements.form.querySelectorAll("input, textarea, button[type='submit']")].forEach((field) => {
       if (field.id === "audio-file-input") {
@@ -1526,6 +1579,7 @@ if (!isBrowserRuntime()) {
     state.activeGrammarId = "";
     state.activeLibraryTextId = "";
     state.selectedSettingsDeck = "";
+    state.deckView = "library";
     stopEditingCard();
     stopEditingGrammarPoint();
     resetSession();
@@ -1584,6 +1638,50 @@ if (!isBrowserRuntime()) {
           .join("")}
       </div>
     `;
+  }
+
+  function createExportSelectionMarkup(items, inputName, emptyText) {
+    if (items.length === 0) {
+      return `<p class="list-meta">${emptyText}</p>`;
+    }
+
+    return items
+      .map(
+        (item) => `
+          <label class="export-choice-row">
+            <input type="checkbox" name="${escapeHtml(inputName)}" value="${escapeHtml(item.value)}" checked />
+            <span>${escapeHtml(item.label)}</span>
+          </label>
+        `,
+      )
+      .join("");
+  }
+
+  function renderExportPickers() {
+    const exportLanguage = elements.exportLanguageSelect.value.trim();
+    const decks = exportLanguage ? getDecks(exportLanguage) : [];
+    const grammarPoints = exportLanguage ? getGrammarForLanguage(exportLanguage) : [];
+    const libraryTexts = exportLanguage ? getLibraryTextsForLanguage(exportLanguage) : [];
+
+    elements.exportDeckOptions.innerHTML = createExportSelectionMarkup(
+      decks.map((deck) => ({ value: deck, label: deck })),
+      "selectedDecks",
+      "No decks available for this language.",
+    );
+    elements.exportGrammarOptions.innerHTML = createExportSelectionMarkup(
+      grammarPoints.map((point) => ({ value: point.id, label: point.title })),
+      "selectedGrammarIds",
+      "No grammar points available for this language.",
+    );
+    elements.exportLibraryOptions.innerHTML = createExportSelectionMarkup(
+      libraryTexts.map((entry) => ({ value: entry.id, label: entry.title })),
+      "selectedLibraryIds",
+      "No texts available for this language.",
+    );
+
+    elements.exportFlashcardsPicker.classList.toggle("hidden", !elements.exportFlashcards.checked);
+    elements.exportGrammarPicker.classList.toggle("hidden", !elements.exportGrammar.checked);
+    elements.exportLibraryPicker.classList.toggle("hidden", !elements.exportLibrary.checked);
   }
 
   function renderHeroStats() {
@@ -1662,7 +1760,8 @@ if (!isBrowserRuntime()) {
       state.activeDeck = ALL_DECKS;
     }
     if (!decks.includes(state.selectedSettingsDeck)) {
-      state.selectedSettingsDeck = decks[0] || "";
+      state.selectedSettingsDeck = "";
+      state.deckView = "library";
     }
 
     const deckOptions = [
@@ -1693,6 +1792,9 @@ if (!isBrowserRuntime()) {
   function renderFlashcard() {
     const currentCard = getCurrentCard();
     const swipeRotation = Math.max(-12, Math.min(12, state.cardSwipeDeltaX / 18));
+    const swipeStrength = Math.min(Math.abs(state.cardSwipeDeltaX) / 140, 1);
+    const swipeDirection =
+      state.cardSwipeDeltaX >= 24 ? "right" : state.cardSwipeDeltaX <= -24 ? "left" : "";
 
     if (!state.targetLanguage) {
       resetCardSwipeState();
@@ -1703,8 +1805,10 @@ if (!isBrowserRuntime()) {
       elements.playAudio.disabled = true;
       elements.card.classList.remove("is-flipped");
       elements.card.classList.remove("is-dragging");
+      elements.card.classList.remove("is-swipe-right", "is-swipe-left");
       elements.card.style.removeProperty("--swipe-x");
       elements.card.style.removeProperty("--swipe-tilt");
+      elements.card.style.removeProperty("--swipe-feedback-opacity");
       elements.card.disabled = true;
       return;
     }
@@ -1718,8 +1822,10 @@ if (!isBrowserRuntime()) {
       elements.playAudio.disabled = true;
       elements.card.classList.remove("is-flipped");
       elements.card.classList.remove("is-dragging");
+      elements.card.classList.remove("is-swipe-right", "is-swipe-left");
       elements.card.style.removeProperty("--swipe-x");
       elements.card.style.removeProperty("--swipe-tilt");
+      elements.card.style.removeProperty("--swipe-feedback-opacity");
       elements.card.disabled = true;
       return;
     }
@@ -1741,8 +1847,11 @@ if (!isBrowserRuntime()) {
     elements.card.disabled = state.isAdvancing || state.studyMode !== "flashcards";
     elements.card.classList.toggle("is-flipped", state.flipped);
     elements.card.classList.toggle("is-dragging", state.cardSwipeActive);
+    elements.card.classList.toggle("is-swipe-right", swipeDirection === "right");
+    elements.card.classList.toggle("is-swipe-left", swipeDirection === "left");
     elements.card.style.setProperty("--swipe-x", `${state.cardSwipeDeltaX}px`);
     elements.card.style.setProperty("--swipe-tilt", `${swipeRotation}deg`);
+    elements.card.style.setProperty("--swipe-feedback-opacity", `${swipeStrength}`);
   }
 
   function renderSessionEnd() {
@@ -1755,6 +1864,12 @@ if (!isBrowserRuntime()) {
     const accuracy = Math.round((state.sessionCorrect / Math.max(1, state.sessionAttempts)) * 100);
     const reviewedCards = getVisibleFlashcards().filter((card) => state.sessionReviewedIds.includes(card.id));
     const knownCards = reviewedCards.filter(isKnownCard).length;
+    const reviewEntries = state.sessionReviewLog
+      .map((entry) => ({
+        ...entry,
+        card: state.flashcards.find((card) => card.id === entry.cardId),
+      }))
+      .filter((entry) => entry.card);
 
     elements.sessionEndTitle.textContent =
       state.sessionCompletionReason === "deck"
@@ -1765,14 +1880,13 @@ if (!isBrowserRuntime()) {
       createMetricCard(`${accuracy}%`, "Session accuracy"),
       createMetricCard(knownCards, "Known cards in this run"),
     ].join("");
-    elements.sessionEndSummary.innerHTML = reviewedCards.length
-      ? reviewedCards
-          .slice(0, 5)
+    elements.sessionEndSummary.innerHTML = reviewEntries.length
+      ? reviewEntries
           .map(
-            (card) => `
-              <div class="mini-row">
+            ({ card, isCorrect }) => `
+              <div class="mini-row ${isCorrect ? "is-correct" : "is-incorrect"}">
                 <strong>${renderHighlightedText(card.prompt)}</strong>
-                <span>${card.deck} · ${getAccuracy(card)}% correct overall · ${card.stats.attempts} total practices</span>
+                <span>${isCorrect ? "Correct" : "Incorrect"} · ${card.deck} · ${getAccuracy(card)}% correct overall · ${card.stats.attempts} total practices</span>
               </div>
             `,
           )
@@ -1811,8 +1925,9 @@ if (!isBrowserRuntime()) {
           (card.audio ? " · audio" : "");
         item.querySelector(".edit-card").addEventListener("click", () => {
           state.selectedSettingsDeck = card.deck;
+          state.deckView = "page";
           startEditingCard(card.id);
-          renderCardFormState();
+          render();
         });
         const playButton = item.querySelector(".play-list-audio");
         playButton.disabled = !card.audio;
@@ -1824,6 +1939,11 @@ if (!isBrowserRuntime()) {
 
   function buildMultipleChoiceOptions(card) {
     const studyContent = getCardStudyContent(card);
+    const cacheKey = `${card.id}::${studyContent.direction}`;
+    if (Array.isArray(state.multipleChoiceOptionOrders[cacheKey]) && state.multipleChoiceOptionOrders[cacheKey].length > 0) {
+      return state.multipleChoiceOptionOrders[cacheKey];
+    }
+
     const targetUsesHighlights = getHighlightedTerms(studyContent.answer).length > 0;
     const pool = getVisibleFlashcards().filter((candidate) => {
       if (candidate.id === card.id) {
@@ -1841,7 +1961,11 @@ if (!isBrowserRuntime()) {
       .sort(() => Math.random() - 0.5)
       .slice(0, 3)
       .map((candidate) => getMultipleChoiceAnswerText(getCardStudyContent(candidate, studyContent.direction).answer));
-    return [getMultipleChoiceAnswerText(studyContent.answer), ...distractors].slice(0, 4).sort(() => Math.random() - 0.5);
+    const options = [getMultipleChoiceAnswerText(studyContent.answer), ...distractors]
+      .slice(0, 4)
+      .sort(() => Math.random() - 0.5);
+    state.multipleChoiceOptionOrders[cacheKey] = options;
+    return options;
   }
 
   function renderStudyModeTabs() {
@@ -1854,6 +1978,7 @@ if (!isBrowserRuntime()) {
   function renderTypingInputs(answerText) {
     const parts = getTypingClozeParts(answerText);
     const blankParts = parts.filter((part) => part.type === "blank");
+    const isSubmitted = Boolean(state.studyAnsweredCardId);
 
     if (blankParts.length === 0) {
       elements.typingCloze.innerHTML = "";
@@ -1865,7 +1990,16 @@ if (!isBrowserRuntime()) {
     elements.typingCloze.innerHTML = parts
       .map((part, index) => {
         if (part.type === "blank") {
-          return `<input class="typing-blank-input" type="text" data-blank-index="${index}" placeholder="" aria-label="Missing word" />`;
+          const blankIndex = parts.slice(0, index + 1).filter((entry) => entry.type === "blank").length - 1;
+          if (isSubmitted) {
+            const submittedValue = state.submittedTypingAnswers[blankIndex] || "";
+            const marker = state.submittedTypingCorrect ? "v" : "x";
+            return `<span class="typing-answer-chip ${state.submittedTypingCorrect ? "is-correct" : "is-incorrect"}">${escapeHtml(
+              submittedValue || " ",
+            )}<span class="typing-answer-mark">${marker}</span></span>`;
+          }
+
+          return `<input class="typing-blank-input" type="text" data-blank-index="${blankIndex}" placeholder="" aria-label="Missing word" />`;
         }
 
         if (part.type === "grammar-link") {
@@ -1950,10 +2084,20 @@ if (!isBrowserRuntime()) {
       const answered = state.studyAnsweredCardId === currentCard.id;
       const options = buildMultipleChoiceOptions(currentCard);
       elements.multipleChoiceOptions.innerHTML = options
-        .map(
-          (option) =>
-            `<button class="option-button" type="button" data-answer="${option}" ${answered || state.isAdvancing || state.sessionComplete ? "disabled" : ""}>${option}</button>`,
-        )
+        .map((option) => {
+          const isSubmittedChoice = answered && option === state.submittedMultipleChoiceAnswer;
+          const optionClass = isSubmittedChoice
+            ? state.submittedMultipleChoiceCorrect
+              ? "option-button is-correct"
+              : "option-button is-incorrect"
+            : "option-button";
+          const optionMarker = isSubmittedChoice
+            ? `<span class="option-status">${state.submittedMultipleChoiceCorrect ? "v" : "x"}</span>`
+            : "";
+          return `<button class="${optionClass}" type="button" data-answer="${option}" ${answered || state.isAdvancing || state.sessionComplete ? "disabled" : ""}>${escapeHtml(
+            option,
+          )}${optionMarker}</button>`;
+        })
         .join("");
 
       [...elements.multipleChoiceOptions.querySelectorAll(".option-button")].forEach((button) => {
@@ -1967,6 +2111,8 @@ if (!isBrowserRuntime()) {
           registerSessionReview(currentCard.id, isCorrect);
           persistFlashcards();
           state.studyAnsweredCardId = currentCard.id;
+          state.submittedMultipleChoiceAnswer = button.dataset.answer || "";
+          state.submittedMultipleChoiceCorrect = isCorrect;
           state.studyFeedback = isCorrect
             ? "Correct."
             : `Incorrect. Correct answer: ${stripAnnotationMarkup(studyContent.answer)}`;
@@ -1983,6 +2129,20 @@ if (!isBrowserRuntime()) {
       const answered = state.studyAnsweredCardId === currentCard.id;
       const canOverride = state.typingAnswerPendingCardId === currentCard.id;
       renderTypingInputs(studyContent.answer);
+      if (!hasHighlightedAnswer) {
+        elements.typingAnswerLabel.classList.remove("hidden");
+        if (answered) {
+          elements.typingAnswerInput.value = state.submittedTypingAnswers[0] || "";
+          elements.typingAnswerInput.classList.toggle("typing-input-correct", state.submittedTypingCorrect);
+          elements.typingAnswerInput.classList.toggle("typing-input-incorrect", !state.submittedTypingCorrect);
+          elements.typingInlineStatus.textContent = state.submittedTypingCorrect ? "v" : "x";
+          elements.typingInlineStatus.className = `typing-inline-status ${state.submittedTypingCorrect ? "is-correct" : "is-incorrect"}`;
+        } else {
+          elements.typingAnswerInput.classList.remove("typing-input-correct", "typing-input-incorrect");
+          elements.typingInlineStatus.textContent = "";
+          elements.typingInlineStatus.className = "typing-inline-status hidden";
+        }
+      }
       elements.typingAnswerInput.disabled = answered || state.isAdvancing || state.sessionComplete;
       [...elements.typingCloze.querySelectorAll(".typing-blank-input")].forEach((input) => {
         input.disabled = answered || state.isAdvancing || state.sessionComplete;
@@ -1993,6 +2153,9 @@ if (!isBrowserRuntime()) {
       elements.typingCloze.innerHTML = "";
       elements.typingCloze.classList.add("hidden");
       elements.typingAnswerLabel.classList.remove("hidden");
+      elements.typingAnswerInput.classList.remove("typing-input-correct", "typing-input-incorrect");
+      elements.typingInlineStatus.textContent = "";
+      elements.typingInlineStatus.className = "typing-inline-status hidden";
       elements.typingAnswerInput.disabled = false;
       elements.typingForm.querySelector('button[type="submit"]').disabled = false;
       elements.acceptTypingAnswer.disabled = true;
@@ -2014,6 +2177,7 @@ if (!isBrowserRuntime()) {
           .join("")
       : `<option value="">No languages available</option>`;
     elements.exportLanguageSelect.disabled = exportLanguages.length === 0;
+    renderExportPickers();
     const studied = currentLanguageCards.filter((card) => card.stats.attempts > 0).length;
     const known = currentLanguageCards.filter(isKnownCard).length;
     const attempts = currentLanguageCards.reduce((sum, card) => sum + card.stats.attempts, 0);
@@ -2110,6 +2274,12 @@ if (!isBrowserRuntime()) {
 
   function renderLibrary() {
     const texts = getLibraryTextsForTargetLanguage();
+    const libraryQuery = normalizeSearchText(state.librarySearch);
+    const filteredTexts = libraryQuery
+      ? texts.filter((entry) =>
+          normalizeSearchText([entry.title, entry.tags.join(" "), entry.text].filter(Boolean).join(" ")).includes(libraryQuery),
+        )
+      : texts;
     const activeText = getActiveLibraryText();
     const editingText = getEditingLibraryText();
     const unreadCount = texts.filter((entry) => entry.status === "unread").length;
@@ -2117,17 +2287,22 @@ if (!isBrowserRuntime()) {
     const finishedCount = texts.filter((entry) => entry.status === "finished").length;
 
     elements.libraryCount.textContent = state.targetLanguage ? `${texts.length} texts` : "0 texts";
+    elements.librarySearchInput.value = state.librarySearch;
     elements.libraryCaptureBody.classList.toggle("hidden", state.libraryCaptureCollapsed);
     elements.toggleLibraryCapture.textContent = state.libraryCaptureCollapsed ? "Show" : "Hide";
     elements.libraryBrowserView.classList.toggle("hidden", state.libraryView !== "list");
     elements.libraryPageView.classList.toggle("hidden", state.libraryView !== "reader");
+    elements.libraryImportView.classList.toggle("hidden", state.libraryView !== "import");
     elements.libraryEditorView.classList.toggle("hidden", state.libraryView !== "editor");
     elements.libraryBackToList.classList.toggle("hidden", state.libraryView === "list");
     elements.editLibraryText.classList.toggle("hidden", state.libraryView !== "reader" || !activeText);
+    elements.libraryCreateNew.classList.toggle("hidden", state.libraryView !== "list");
 
     if (!state.targetLanguage) {
       elements.libraryPanelTitle.textContent = "Text library";
       elements.librarySummaryStats.innerHTML = "";
+      elements.librarySearchInput.value = "";
+      elements.librarySearchInput.disabled = true;
       elements.libraryList.innerHTML = `<p class="list-meta">Select a target language to build a reading library.</p>`;
       elements.libraryReaderMeta.innerHTML = "";
       elements.libraryReaderContent.innerHTML = `<p class="list-meta">Import or select a text to start reading.</p>`;
@@ -2136,11 +2311,15 @@ if (!isBrowserRuntime()) {
       elements.librarySnippetInput.disabled = true;
       elements.libraryReadingProgress.classList.add("hidden");
       elements.libraryReaderActions.classList.add("hidden");
+      elements.libraryImportView.classList.add("hidden");
       elements.libraryEditorView.classList.add("hidden");
       elements.editLibraryText.classList.add("hidden");
       elements.deleteLibraryText.classList.add("hidden");
+      elements.libraryCreateNew.classList.remove("hidden");
       return;
     }
+
+    elements.librarySearchInput.disabled = false;
 
     const libraryDecks = getDecks();
     elements.libraryDeckSelect.innerHTML = libraryDecks.length
@@ -2158,8 +2337,8 @@ if (!isBrowserRuntime()) {
       createMetricCard(finishedCount, "Finished"),
     ].join("");
 
-    elements.libraryList.innerHTML = texts.length
-      ? texts
+    elements.libraryList.innerHTML = filteredTexts.length
+      ? filteredTexts
           .slice()
           .sort((left, right) => left.title.localeCompare(right.title))
           .map(
@@ -2175,7 +2354,11 @@ if (!isBrowserRuntime()) {
             `,
           )
           .join("")
-      : `<p class="list-meta">No texts yet for ${state.targetLanguage}. Import one to start building the library.</p>`;
+      : `<p class="list-meta">${
+          texts.length
+            ? `No texts match "${escapeHtml(state.librarySearch)}".`
+            : `No texts yet for ${state.targetLanguage}. Import one to start building the library.`
+        }</p>`;
 
     [...elements.libraryList.querySelectorAll("[data-library-id]")].forEach((item) => {
       const openEntry = () => {
@@ -2197,6 +2380,16 @@ if (!isBrowserRuntime()) {
       elements.libraryPanelTitle.textContent = "Text library";
       elements.libraryReaderMeta.innerHTML = `<p class="list-meta">No imported texts yet.</p>`;
       elements.libraryReaderContent.innerHTML = `<p class="list-meta">Import a text to start reading.</p>`;
+      elements.libraryReadingProgress.classList.add("hidden");
+      elements.libraryReaderActions.classList.add("hidden");
+      elements.deleteLibraryText.classList.add("hidden");
+      elements.editLibraryText.classList.add("hidden");
+      return;
+    }
+
+    if (state.libraryView === "import") {
+      elements.libraryPanelTitle.textContent = "Import text";
+      elements.libraryReaderMeta.innerHTML = "";
       elements.libraryReadingProgress.classList.add("hidden");
       elements.libraryReaderActions.classList.add("hidden");
       elements.deleteLibraryText.classList.add("hidden");
@@ -2258,9 +2451,45 @@ if (!isBrowserRuntime()) {
 
   function renderGrammar() {
     const points = getGrammarForTargetLanguage();
+    const grammarQuery = normalizeSearchText(state.grammarSearch);
+    const filteredPoints = grammarQuery
+      ? points
+          .map((point) => {
+            const titleText = normalizeSearchText(point.title);
+            const summaryText = normalizeSearchText(point.summary);
+            const contentText = normalizeSearchText(point.blocks.map(flattenGrammarBlockText).join(" "));
+            const titleIndex = titleText.indexOf(grammarQuery);
+            const summaryIndex = summaryText.indexOf(grammarQuery);
+            const contentIndex = contentText.indexOf(grammarQuery);
+
+            let priority = 99;
+            let position = Number.MAX_SAFE_INTEGER;
+            if (titleIndex !== -1) {
+              priority = 0;
+              position = titleIndex;
+            } else if (summaryIndex !== -1) {
+              priority = 1;
+              position = summaryIndex;
+            } else if (contentIndex !== -1) {
+              priority = 2;
+              position = contentIndex;
+            }
+
+            return { point, priority, position };
+          })
+          .filter((entry) => entry.priority < 99)
+          .sort(
+            (left, right) =>
+              left.priority - right.priority ||
+              left.position - right.position ||
+              left.point.title.localeCompare(right.point.title),
+          )
+          .map((entry) => entry.point)
+      : points;
     const activePoint = getActiveGrammarPoint();
 
     elements.grammarCount.textContent = state.targetLanguage ? `${points.length} points` : "0 points";
+    elements.grammarSearchInput.value = state.grammarSearch;
     elements.grammarLibraryView.classList.toggle("hidden", state.grammarView !== "library");
     elements.grammarPageView.classList.toggle("hidden", state.grammarView !== "page");
     elements.grammarEditorView.classList.toggle("hidden", state.grammarView !== "editor");
@@ -2273,11 +2502,15 @@ if (!isBrowserRuntime()) {
     if (!state.targetLanguage) {
       elements.grammarPanelTitle.textContent = "Grammar library";
       elements.grammarPage.innerHTML = `<p class="list-meta">Select a target language to start building grammar notes.</p>`;
+      elements.grammarSearchInput.value = "";
+      elements.grammarSearchInput.disabled = true;
       elements.grammarList.innerHTML = `<p class="list-meta">No language selected.</p>`;
       renderGrammarSectionsEditor();
       renderGrammarLinkSuggestions();
       return;
     }
+
+    elements.grammarSearchInput.disabled = false;
 
     if (state.grammarView === "library") {
       elements.grammarPanelTitle.textContent = "Grammar library";
@@ -2287,8 +2520,8 @@ if (!isBrowserRuntime()) {
       elements.grammarPanelTitle.textContent = activePoint?.title || "Grammar point";
     }
 
-    elements.grammarList.innerHTML = points.length
-      ? points
+    elements.grammarList.innerHTML = filteredPoints.length
+      ? filteredPoints
           .map(
             (point) => `
               <article class="grammar-list-item${point.id === state.activeGrammarId ? " is-active" : ""}" tabindex="0" data-grammar-id="${point.id}">
@@ -2304,7 +2537,11 @@ if (!isBrowserRuntime()) {
             `,
           )
           .join("")
-      : `<p class="list-meta">No grammar points yet for ${state.targetLanguage}.</p>`;
+      : `<p class="list-meta">${
+          points.length
+            ? `No grammar points match "${escapeHtml(state.grammarSearch)}".`
+            : `No grammar points yet for ${state.targetLanguage}.`
+        }</p>`;
 
     [...elements.grammarList.querySelectorAll(".grammar-list-item")].forEach((item) => {
       const openPoint = () => {
@@ -2431,8 +2668,12 @@ if (!isBrowserRuntime()) {
   function renderDeckSummary() {
     const decks = getDecks();
     elements.deckCount.textContent = state.targetLanguage ? `${decks.length} decks` : "0 decks";
+    elements.deckLibraryView.classList.toggle("hidden", state.deckView !== "library");
+    elements.deckPageView.classList.toggle("hidden", state.deckView !== "page");
+    elements.decksBackToLibrary.classList.toggle("hidden", state.deckView === "library");
 
     if (!state.targetLanguage) {
+      elements.decksPanelTitle.textContent = "";
       elements.deckSummary.innerHTML = `<p class="list-meta">Select a target language to manage its decks.</p>`;
       elements.settingsDeckTitle.textContent = "Deck workspace";
       elements.selectedDeckMeta.textContent = "Select a deck to manage its cards.";
@@ -2442,6 +2683,7 @@ if (!isBrowserRuntime()) {
     }
 
     if (decks.length === 0) {
+      elements.decksPanelTitle.textContent = "";
       elements.deckSummary.innerHTML = `<p class="list-meta">No decks exist yet for ${state.targetLanguage}. Add cards below to create one.</p>`;
       elements.settingsDeckTitle.textContent = "Deck workspace";
       elements.selectedDeckMeta.textContent = "Create a deck to start adding cards.";
@@ -2449,6 +2691,8 @@ if (!isBrowserRuntime()) {
       elements.deleteSelectedDeck.classList.add("hidden");
       return;
     }
+
+    elements.decksPanelTitle.textContent = "";
 
     elements.deckSummary.innerHTML = `
       <div class="deck-table settings-deck-list">
@@ -2473,6 +2717,7 @@ if (!isBrowserRuntime()) {
     [...elements.deckSummary.querySelectorAll("[data-settings-deck]")].forEach((button) => {
       button.addEventListener("click", () => {
         state.selectedSettingsDeck = button.dataset.settingsDeck;
+        state.deckView = "page";
         stopEditingCard();
         render();
       });
@@ -2860,11 +3105,16 @@ if (!isBrowserRuntime()) {
       return;
     }
 
+    const formData = new FormData(event.currentTarget);
+
     const bundle = buildExportBundle(state, {
       language: exportLanguage,
       includeFlashcards: elements.exportFlashcards.checked,
       includeGrammar: elements.exportGrammar.checked,
       includeLibrary: elements.exportLibrary.checked,
+      selectedDecks: formData.getAll("selectedDecks").map(String),
+      selectedGrammarIds: formData.getAll("selectedGrammarIds").map(String),
+      selectedLibraryIds: formData.getAll("selectedLibraryIds").map(String),
     });
 
     if (bundle.flashcards.length === 0 && bundle.grammarPoints.length === 0 && bundle.libraryTexts.length === 0) {
@@ -2881,6 +3131,14 @@ if (!isBrowserRuntime()) {
     anchor.click();
     URL.revokeObjectURL(url);
     elements.dataTransferStatus.textContent = "Selected data exported as a JSON bundle.";
+  });
+  elements.exportLanguageSelect.addEventListener("change", () => {
+    renderExportPickers();
+  });
+  [elements.exportFlashcards, elements.exportGrammar, elements.exportLibrary].forEach((input) => {
+    input.addEventListener("change", () => {
+      renderExportPickers();
+    });
   });
 
   elements.themeSettingsForm.addEventListener("change", (event) => {
@@ -3015,6 +3273,9 @@ if (!isBrowserRuntime()) {
     }
     persistFlashcards();
     state.studyAnsweredCardId = currentCard.id;
+    state.submittedTypingAnswers =
+      expectedHighlights.length > 0 ? typedBlankInputs.map((input) => input.value) : [typedAnswer];
+    state.submittedTypingCorrect = isCorrect;
     state.studyFeedback = isCorrect ? "Correct." : `Incorrect. Correct answer: ${expectedAnswer}`;
     state.typingAnswerPendingCardId = isCorrect ? "" : currentCard.id;
     event.currentTarget.reset();
@@ -3035,6 +3296,7 @@ if (!isBrowserRuntime()) {
     targetCard.stats.correct += 1;
     finalizePendingTypingReview(true);
     persistFlashcards();
+    state.submittedTypingCorrect = true;
     state.studyFeedback = "Accepted as correct.";
     state.typingAnswerPendingCardId = "";
     render();
@@ -3078,12 +3340,25 @@ if (!isBrowserRuntime()) {
     ensureCustomDeck(state.targetLanguage, deckName);
     persistSettings();
     state.selectedSettingsDeck = deckName;
+    state.deckView = "page";
     event.currentTarget.reset();
+    render();
+  });
+  elements.decksBackToLibrary.addEventListener("click", () => {
+    stopEditingCard();
+    state.deckView = "library";
     render();
   });
   elements.libraryBackToList.addEventListener("click", () => {
     stopEditingLibraryText();
     state.libraryView = "list";
+    render();
+  });
+  elements.libraryCreateNew.addEventListener("click", () => {
+    stopEditingLibraryText();
+    elements.libraryImportForm.reset();
+    elements.libraryImportStatus.textContent = "Imports are cleaned automatically. PDF extraction is best effort.";
+    state.libraryView = "import";
     render();
   });
   elements.editLibraryText.addEventListener("click", () => {
@@ -3099,6 +3374,10 @@ if (!isBrowserRuntime()) {
     stopEditingLibraryText();
     state.libraryView = state.activeLibraryTextId ? "reader" : "list";
     render();
+  });
+  elements.librarySearchInput.addEventListener("input", (event) => {
+    state.librarySearch = event.target.value;
+    renderLibrary();
   });
   elements.libraryEditTextInput.addEventListener("input", () => {
     renderLibraryGrammarSuggestions();
@@ -3227,6 +3506,10 @@ if (!isBrowserRuntime()) {
     state.grammarView = "editor";
     state.draftGrammarSections = [createGrammarBlock("text")];
     render();
+  });
+  elements.grammarSearchInput.addEventListener("input", (event) => {
+    state.grammarSearch = event.target.value;
+    renderGrammar();
   });
   elements.insertGrammarLink.addEventListener("click", () => {
     const targetName = elements.grammarLinkTarget.value;

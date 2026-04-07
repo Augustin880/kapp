@@ -59,59 +59,73 @@
         <section class="tab-panel is-active" data-panel="intro">
           <section class="panel intro-shell">
             <div class="intro-hero">
-              <div>
-                <p class="panel-kicker">Welcome</p>
-                <h2>Kapp is a personal language-learning workspace.</h2>
-                <p class="intro-copy">
-                  Build decks, write grammar pages, import reading texts, and track your progress language by language.
-                </p>
-              </div>
-              <div class="intro-highlight">
-                <strong>Start with one target language.</strong>
-                <span>Everything in the app filters to the language selected at the top.</span>
-              </div>
+              <p class="panel-kicker">Intro</p>
+              <h2>Use Kapp by building one language at a time.</h2>
+              <p class="intro-copy">
+                Pick a target language at the top, add your own content, then study from decks, grammar pages, and texts.
+              </p>
             </div>
 
-            <div class="intro-grid">
-              <article class="intro-card">
-                <p class="panel-kicker">Flashcards</p>
-                <h3>Study actively</h3>
-                <p>Use flashcards, multiple choice, and typing. Cards can go both directions and track accuracy over time.</p>
-              </article>
-
-              <article class="intro-card">
-                <p class="panel-kicker">Grammar</p>
-                <h3>Write reference pages</h3>
-                <p>Create grammar points with nested sections, examples, exercises, videos, colors, and links from cards or texts.</p>
-              </article>
-
-              <article class="intro-card">
-                <p class="panel-kicker">Library</p>
-                <h3>Read real texts</h3>
-                <p>Import stories, dialogues, or notes, read them in chunks, and pull words or sentences into decks.</p>
-              </article>
-
-              <article class="intro-card">
-                <p class="panel-kicker">Statistics</p>
-                <h3>Measure progress</h3>
-                <p>See current-language mastery, deck progress, card performance, and export or import your full data bundle.</p>
-              </article>
-            </div>
-
-            <div class="intro-steps">
-              <div class="intro-step">
-                <strong>1. Choose a language</strong>
-                <span>Add a target language in the header.</span>
+            <section class="intro-section">
+              <div class="intro-section-head">
+                <p class="panel-kicker">Start Here</p>
+                <h3>First setup</h3>
               </div>
-              <div class="intro-step">
-                <strong>2. Create content</strong>
-                <span>Make decks, grammar notes, or reading texts.</span>
+              <div class="intro-checklist">
+                <article class="intro-step">
+                  <strong>1. Add a target language</strong>
+                  <span>Use the language area in the header. Everything in the app is filtered by the selected language.</span>
+                </article>
+                <article class="intro-step">
+                  <strong>2. Create a deck</strong>
+                  <span>Open the Decks tab, create a deck, then add the first cards you want to learn.</span>
+                </article>
+                <article class="intro-step">
+                  <strong>3. Add support material</strong>
+                  <span>Create grammar pages and import texts so your cards can link to real explanations and examples.</span>
+                </article>
               </div>
-              <div class="intro-step">
-                <strong>3. Study and review</strong>
-                <span>Use the study modes and let the app track what you know.</span>
+            </section>
+
+            <section class="intro-section">
+              <div class="intro-section-head">
+                <p class="panel-kicker">Daily Use</p>
+                <h3>Simple study loop</h3>
               </div>
-            </div>
+              <div class="intro-guide">
+                <article class="intro-card">
+                  <strong>Study</strong>
+                  <p>Use Flashcards for swipe review, Multiple choice for recognition, and Typing for active recall.</p>
+                </article>
+                <article class="intro-card">
+                  <strong>Read</strong>
+                  <p>Open a text in Library, read it in sections, and send useful words or sentences into a deck.</p>
+                </article>
+                <article class="intro-card">
+                  <strong>Understand</strong>
+                  <p>Open Grammar pages when a card or text links to a rule, then go back to study with that context.</p>
+                </article>
+                <article class="intro-card">
+                  <strong>Review progress</strong>
+                  <p>Use Statistics to see what is studied, what is known, and which cards still need more work.</p>
+                </article>
+              </div>
+            </section>
+
+            <section class="intro-section intro-focus-note">
+              <div class="intro-section-head">
+                <p class="panel-kicker">How The Tabs Fit Together</p>
+                <h3>What each tab is for</h3>
+              </div>
+              <div class="intro-stack">
+                <div class="intro-row"><strong>Decks</strong><span>Create decks and edit the cards inside them.</span></div>
+                <div class="intro-row"><strong>Flashcards</strong><span>Study the current deck with the three practice modes.</span></div>
+                <div class="intro-row"><strong>Grammar</strong><span>Write reference pages with sections, examples, exercises, and videos.</span></div>
+                <div class="intro-row"><strong>Library</strong><span>Import reading material and turn text selections into new cards.</span></div>
+                <div class="intro-row"><strong>Statistics</strong><span>Check performance for the current language only.</span></div>
+                <div class="intro-row"><strong>Settings</strong><span>Change theme, import/export data, or clear local data.</span></div>
+              </div>
+            </section>
           </section>
         </section>
 
@@ -138,6 +152,9 @@
             <div class="study-progress" id="study-progress"></div>
 
             <div class="study-session-content" id="study-session-content">
+              <div class="study-mode-header">
+                <p class="panel-kicker">Study method</p>
+              </div>
               <div class="mode-tabs study-mode-tabs">
                 <button class="mode-tab is-active" type="button" data-study-mode="flashcards">Flashcards</button>
                 <button class="mode-tab" type="button" data-study-mode="multiple-choice">Multiple choice</button>
@@ -174,6 +191,7 @@
                     <label id="typing-answer-label">
                       Type the answer
                       <input id="typing-answer-input" name="typingAnswer" type="text" placeholder="Type your answer" />
+                      <span class="typing-inline-status hidden" id="typing-inline-status"></span>
                     </label>
                     <div class="typing-actions">
                       <button class="primary" type="submit">Check answer</button>
@@ -228,6 +246,10 @@
               <div class="panel-header">
                 <p class="list-meta" id="grammar-count">0 points</p>
               </div>
+              <label class="list-search">
+                Search grammar
+                <input id="grammar-search-input" type="search" placeholder="Search title, summary, or content" />
+              </label>
               <div class="grammar-list" id="grammar-list"></div>
             </div>
 
@@ -282,61 +304,20 @@
                 <button class="secondary hidden" id="library-back-to-list" type="button">Back to library</button>
                 <button class="secondary hidden" id="edit-library-text" type="button">Edit text</button>
                 <button class="ghost hidden" id="delete-library-text" type="button">Delete text</button>
+                <button class="primary" id="library-create-new" type="button">Import text</button>
               </div>
             </div>
 
             <div class="library-browser-view" id="library-browser-view">
-              <div class="library-layout">
-                <section class="panel library-import-panel">
-                  <div class="panel-header">
-                    <div>
-                      <p class="panel-kicker">Library</p>
-                      <h2>Import text</h2>
-                    </div>
-                    <p class="list-meta" id="library-count">0 texts</p>
-                  </div>
-                  <div class="chart-grid" id="library-summary-stats"></div>
-                  <form id="library-import-form" class="settings-form">
-                    <label>
-                      Title
-                      <input id="library-title-input" name="title" type="text" placeholder="A short dialogue at the market" />
-                    </label>
-                    <label>
-                      Tags
-                      <input id="library-tags-input" name="tags" type="text" placeholder="dialogue, beginner, daily life" />
-                    </label>
-                    <label>
-                      Difficulty
-                      <select id="library-difficulty-input" name="difficulty">
-                        <option value="">Auto detect</option>
-                        <option value="Beginner">Beginner</option>
-                        <option value="Intermediate">Intermediate</option>
-                        <option value="Advanced">Advanced</option>
-                      </select>
-                    </label>
-                    <label>
-                      Import file
-                      <input id="library-file-input" name="sourceFile" type="file" accept=".txt,.md,.pdf,text/plain,text/markdown,application/pdf" />
-                    </label>
-                    <label>
-                      Or paste text
-                      <textarea id="library-text-input" name="text" rows="8" placeholder="Paste text here if you do not want to import a file."></textarea>
-                    </label>
-                    <p class="field-help" id="library-import-status">Imports are cleaned automatically. PDF extraction is best effort.</p>
-                    <button class="primary" id="save-library-text-button" type="submit">Import text</button>
-                  </form>
-                </section>
-
-                <section class="panel library-browse-panel">
-                  <div class="panel-header">
-                    <div>
-                      <p class="panel-kicker">Library</p>
-                      <h2>Browse texts</h2>
-                    </div>
-                  </div>
-                  <div class="library-list" id="library-list"></div>
-                </section>
+              <div class="panel-header">
+                <p class="list-meta" id="library-count">0 texts</p>
               </div>
+              <div class="chart-grid" id="library-summary-stats"></div>
+              <label class="list-search">
+                Search texts
+                <input id="library-search-input" type="search" placeholder="Search title, tags, or text" />
+              </label>
+              <div class="library-list" id="library-list"></div>
             </div>
 
             <div class="library-page-view hidden" id="library-page-view">
@@ -391,6 +372,38 @@
                 <button class="secondary" id="library-previous-chunk" type="button">Previous</button>
                 <button class="primary" id="library-next-chunk" type="button">Next</button>
               </div>
+            </div>
+
+            <div class="library-import-view hidden" id="library-import-view">
+              <form id="library-import-form" class="settings-form">
+                <label>
+                  Title
+                  <input id="library-title-input" name="title" type="text" placeholder="A short dialogue at the market" />
+                </label>
+                <label>
+                  Tags
+                  <input id="library-tags-input" name="tags" type="text" placeholder="dialogue, beginner, daily life" />
+                </label>
+                <label>
+                  Difficulty
+                  <select id="library-difficulty-input" name="difficulty">
+                    <option value="">Auto detect</option>
+                    <option value="Beginner">Beginner</option>
+                    <option value="Intermediate">Intermediate</option>
+                    <option value="Advanced">Advanced</option>
+                  </select>
+                </label>
+                <label>
+                  Import file
+                  <input id="library-file-input" name="sourceFile" type="file" accept=".txt,.md,.pdf,text/plain,text/markdown,application/pdf" />
+                </label>
+                <label>
+                  Or paste text
+                  <textarea id="library-text-input" name="text" rows="12" placeholder="Paste text here if you do not want to import a file."></textarea>
+                </label>
+                <p class="field-help" id="library-import-status">Imports are cleaned automatically. PDF extraction is best effort.</p>
+                <button class="primary" id="save-library-text-button" type="submit">Import text</button>
+              </form>
             </div>
 
             <div class="library-editor-view hidden" id="library-editor-view">
@@ -497,13 +510,19 @@
         </section>
 
         <section class="tab-panel" data-panel="decks">
-          <div class="settings-layout">
-            <section class="panel">
+          <section class="panel deck-shell">
+            <div class="panel-header">
+              <div>
+                <p class="panel-kicker">Decks</p>
+                <h2 id="decks-panel-title">Deck library</h2>
+              </div>
+              <div class="recording-actions">
+                <button class="secondary hidden" id="decks-back-to-library" type="button">Back to decks</button>
+              </div>
+            </div>
+
+            <div class="deck-library-view" id="deck-library-view">
               <div class="panel-header">
-                <div>
-                  <p class="panel-kicker">Decks</p>
-                  <h2>Decks</h2>
-                </div>
                 <p class="list-meta" id="deck-count">0 decks</p>
               </div>
               <form id="create-deck-form" class="settings-form">
@@ -514,12 +533,11 @@
                 <button class="primary" type="submit">Create deck</button>
               </form>
               <div id="deck-summary" class="deck-summary"></div>
-            </section>
+            </div>
 
-            <section class="panel deck-workspace">
+            <div class="deck-page-view hidden" id="deck-page-view">
               <div class="panel-header">
                 <div>
-                  <p class="panel-kicker">Decks</p>
                   <h2 id="settings-deck-title">Deck workspace</h2>
                 </div>
                 <div class="recording-actions">
@@ -625,8 +643,8 @@
                   <button class="secondary hidden" id="cancel-edit-card" type="button">Cancel edit</button>
                 </div>
               </form>
-            </section>
-          </div>
+            </div>
+          </section>
         </section>
 
         <section class="tab-panel" data-panel="settings">
@@ -660,14 +678,26 @@
                   <input id="export-flashcards" name="includeFlashcards" type="checkbox" checked />
                   <span>Decks and flashcards</span>
                 </label>
+                <details class="export-picker" id="export-flashcards-picker">
+                  <summary>Choose decks</summary>
+                  <div class="export-picker-body" id="export-deck-options"></div>
+                </details>
                 <label class="option-row">
                   <input id="export-grammar" name="includeGrammar" type="checkbox" checked />
                   <span>Grammar points</span>
                 </label>
+                <details class="export-picker" id="export-grammar-picker">
+                  <summary>Choose grammar points</summary>
+                  <div class="export-picker-body" id="export-grammar-options"></div>
+                </details>
                 <label class="option-row">
                   <input id="export-library" name="includeLibrary" type="checkbox" checked />
                   <span>Library texts</span>
                 </label>
+                <details class="export-picker" id="export-library-picker">
+                  <summary>Choose texts</summary>
+                  <div class="export-picker-body" id="export-library-options"></div>
+                </details>
               </div>
               <button class="secondary" id="export-app-data" type="submit">Export data</button>
             </form>
