@@ -150,6 +150,41 @@ function hydrateLibraryText(entry) {
   };
 }
 
+function buildExportBundle(state) {
+  return {
+    app: "kapp",
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    settings: state.settings,
+    flashcards: state.flashcards,
+    grammarPoints: state.grammarPoints,
+    libraryTexts: state.libraryTexts,
+  };
+}
+
+function hydrateImportBundle(bundle) {
+  if (!bundle || typeof bundle !== "object") {
+    throw new Error("Invalid data file.");
+  }
+
+  return {
+    settings: {
+      targetLanguage: typeof bundle.settings?.targetLanguage === "string" ? bundle.settings.targetLanguage : "",
+      customLanguages: Array.isArray(bundle.settings?.customLanguages)
+        ? bundle.settings.customLanguages.filter((language) => typeof language === "string")
+        : [],
+      customDecks: Array.isArray(bundle.settings?.customDecks)
+        ? bundle.settings.customDecks
+            .filter((deck) => deck && typeof deck.language === "string" && typeof deck.name === "string")
+            .map((deck) => ({ language: deck.language, name: deck.name }))
+        : [],
+    },
+    flashcards: Array.isArray(bundle.flashcards) ? bundle.flashcards.map(hydrateCard) : [],
+    grammarPoints: Array.isArray(bundle.grammarPoints) ? bundle.grammarPoints.map(hydrateGrammarPoint) : [],
+    libraryTexts: Array.isArray(bundle.libraryTexts) ? bundle.libraryTexts.map(hydrateLibraryText) : [],
+  };
+}
+
 function isBrowserRuntime() {
   return typeof window !== "undefined" && typeof document !== "undefined";
 }
@@ -564,6 +599,11 @@ if (!isBrowserRuntime()) {
     statisticsViewTabs: [...document.querySelectorAll("[data-stats-view]")],
     deckSummary: document.querySelector("#deck-summary"),
     deckCount: document.querySelector("#deck-count"),
+    dataTransferStatus: document.querySelector("#data-transfer-status"),
+    exportAppData: document.querySelector("#export-app-data"),
+    importAppDataForm: document.querySelector("#import-app-data-form"),
+    importAppDataFile: document.querySelector("#import-app-data-file"),
+    importAppDataButton: document.querySelector("#import-app-data-button"),
     createDeckForm: document.querySelector("#create-deck-form"),
     settingsDeckTitle: document.querySelector("#settings-deck-title"),
     selectedDeckMeta: document.querySelector("#selected-deck-meta"),
@@ -2553,6 +2593,32 @@ if (!isBrowserRuntime()) {
     render();
   }
 
+  function applyImportedData(bundle) {
+    cancelPendingAdvance();
+    stopEditingCard();
+    stopEditingGrammarPoint();
+    stopEditingLibraryText();
+
+    state.settings = bundle.settings;
+    state.flashcards = bundle.flashcards;
+    state.grammarPoints = bundle.grammarPoints;
+    state.libraryTexts = bundle.libraryTexts;
+    state.targetLanguage = state.settings.targetLanguage;
+    state.activeDeck = ALL_DECKS;
+    state.activeGrammarId = "";
+    state.activeLibraryTextId = "";
+    state.selectedSettingsDeck = "";
+    state.libraryView = "list";
+    state.selectedLibrarySnippet = "";
+    state.libraryCaptureCollapsed = false;
+    resetSession();
+
+    persistSettings();
+    persistFlashcards();
+    persistGrammarPoints();
+    persistLibraryTexts();
+  }
+
   function updateLibraryReadingPosition(textId, nextChunk) {
     const targetText = state.libraryTexts.find((entry) => entry.id === textId);
     if (!targetText) {
@@ -2605,6 +2671,45 @@ if (!isBrowserRuntime()) {
     elements.addLanguageForm.reset();
     elements.addLanguageForm.classList.remove("is-open");
     render();
+  });
+
+  elements.exportAppData.addEventListener("click", () => {
+    const bundle = buildExportBundle(state);
+    const file = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(file);
+    const timestamp = new Date().toISOString().slice(0, 10);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `kapp-data-${timestamp}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    elements.dataTransferStatus.textContent = "Data exported as a JSON bundle.";
+  });
+
+  elements.importAppDataForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const file = elements.importAppDataFile.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    if (!window.confirm("Importing will replace the local app data on this device. Continue?")) {
+      return;
+    }
+
+    elements.importAppDataButton.disabled = true;
+    try {
+      const parsed = JSON.parse(await file.text());
+      const hydrated = hydrateImportBundle(parsed);
+      applyImportedData(hydrated);
+      elements.importAppDataForm.reset();
+      elements.dataTransferStatus.textContent = "Data imported successfully.";
+      render();
+    } catch {
+      elements.dataTransferStatus.textContent = "Import failed. Please use a valid Kapp JSON export.";
+    } finally {
+      elements.importAppDataButton.disabled = false;
+    }
   });
 
   elements.featureTabs.forEach((tab) => {

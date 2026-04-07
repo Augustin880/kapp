@@ -456,6 +456,26 @@
                 <button class="primary" type="submit">Create deck</button>
               </form>
               <div id="deck-summary" class="deck-summary"></div>
+
+              <div class="recording-panel">
+                <div class="panel-header">
+                  <div>
+                    <p class="panel-kicker">Data</p>
+                    <h2>Export And Import</h2>
+                  </div>
+                </div>
+                <p class="field-help" id="data-transfer-status">Export your app as a JSON file, or import a shared bundle to replace local data.</p>
+                <div class="recording-actions">
+                  <button class="secondary" id="export-app-data" type="button">Export data</button>
+                </div>
+                <form id="import-app-data-form" class="settings-form">
+                  <label>
+                    Import bundle
+                    <input id="import-app-data-file" name="appDataFile" type="file" accept="application/json,.json" required />
+                  </label>
+                  <button class="primary" id="import-app-data-button" type="submit">Import data</button>
+                </form>
+              </div>
             </section>
 
             <section class="panel deck-workspace">
