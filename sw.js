@@ -1,4 +1,4 @@
-const CACHE_NAME = "kapp-v1";
+const CACHE_NAME = "kapp-v2";
 const APP_ASSETS = [
   "./",
   "./index.html",
