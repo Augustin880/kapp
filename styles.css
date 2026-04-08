@@ -210,9 +210,8 @@ h2 {
 .language-tabs {
   display: flex;
   gap: 10px;
-  overflow-x: auto;
-  padding-bottom: 4px;
-  scrollbar-width: thin;
+  flex-wrap: wrap;
+  align-items: flex-start;
 }
 
 .language-tab {
@@ -224,12 +223,53 @@ h2 {
   color: var(--muted);
   font-weight: 600;
   white-space: nowrap;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
 }
 
 .language-tab.is-active {
   background: var(--accent);
   color: white;
   border-color: transparent;
+}
+
+.language-tab-label {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  padding: 0 12px 0 0;
+  cursor: pointer;
+}
+
+.language-tab-delete {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font-size: 0.72rem;
+  line-height: 1;
+  opacity: 0.72;
+  cursor: pointer;
+}
+
+.language-tab-delete:hover {
+  opacity: 1;
+}
+
+.language-tab-add {
+  justify-content: center;
+  min-width: 42px;
+  padding: 10px 0;
+  font-size: 1.1rem;
+  line-height: 1;
 }
 
 .add-language-form {
@@ -857,10 +897,12 @@ body[data-theme="night"] .grammar-hero,
 body[data-theme="night"] .grammar-section,
 body[data-theme="night"] .grammar-list-item,
 body[data-theme="night"] .grammar-section-editor-card,
+body[data-theme="night"] .folder-list-item,
 body[data-theme="night"] .library-list-item,
 body[data-theme="night"] .library-reader-content,
 body[data-theme="night"] .library-visual-editor,
 body[data-theme="night"] .library-link-popover,
+body[data-theme="night"] .tree-drop-root,
 body[data-theme="night"] .library-card-link::after,
 body[data-theme="night"] .intro-highlight,
 body[data-theme="night"] .intro-card,
@@ -1065,6 +1107,11 @@ body[data-theme="night"] .ghost {
   gap: 12px;
 }
 
+#card-stat-list {
+  max-height: 420px;
+  overflow: auto;
+}
+
 .tag-row {
   display: flex;
   flex-wrap: wrap;
@@ -1252,6 +1299,63 @@ body[data-theme="night"] .ghost {
 
 .settings-deck-list {
   margin-top: 12px;
+}
+
+.tree-node,
+.tree-children {
+  display: grid;
+  gap: 12px;
+}
+
+.tree-children {
+  padding-left: 18px;
+}
+
+.tree-item {
+  margin-left: calc(var(--tree-depth, 0) * 6px);
+}
+
+.tree-drop-root {
+  padding: 10px 14px;
+  border-radius: 16px;
+  border: 1px dashed rgba(31, 26, 21, 0.18);
+  color: var(--muted);
+  font-size: 0.92rem;
+  text-align: center;
+  background: rgba(255, 250, 244, 0.64);
+}
+
+.tree-drop-root.is-drop-target,
+.folder-list-item.is-drop-target {
+  border-color: rgba(44, 138, 88, 0.52);
+  background: rgba(223, 244, 231, 0.92);
+}
+
+.tree-item.is-dragging {
+  opacity: 0.48;
+}
+
+.folder-list-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  background: rgba(245, 239, 227, 0.92);
+  border: 1px dashed rgba(31, 26, 21, 0.16);
+  align-items: start;
+  cursor: pointer;
+}
+
+.folder-list-item p {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+
+.folder-list-item strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .settings-deck-row {
@@ -1445,7 +1549,7 @@ body[data-theme="night"] .ghost {
   left: 0;
   bottom: calc(100% + 8px);
   z-index: 4;
-  min-width: 180px;
+  width: max-content;
   max-width: min(320px, 70vw);
   padding: 10px 12px;
   border-radius: 14px;

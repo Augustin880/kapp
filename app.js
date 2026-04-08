@@ -134,6 +134,8 @@ function extractPdfTextFromBuffer(arrayBuffer) {
 function hydrateLibraryText(entry) {
   return {
     id: typeof entry.id === "string" ? entry.id : generateId(),
+    kind: entry.kind === "folder" ? "folder" : "text",
+    parentId: typeof entry.parentId === "string" ? entry.parentId : "",
     language: typeof entry.language === "string" ? entry.language : "",
     title: typeof entry.title === "string" ? entry.title : "Untitled text",
     text: typeof entry.text === "string" ? cleanImportedText(entry.text) : "",
@@ -150,6 +152,16 @@ function hydrateLibraryText(entry) {
   };
 }
 
+function hydrateDeckRecord(entry) {
+  return {
+    id: typeof entry.id === "string" ? entry.id : generateId(),
+    language: typeof entry.language === "string" ? entry.language : "",
+    name: typeof entry.name === "string" ? entry.name : "",
+    type: entry.type === "folder" ? "folder" : "deck",
+    parentId: typeof entry.parentId === "string" ? entry.parentId : "",
+  };
+}
+
 function buildExportBundle(state, options) {
   const includeFlashcards = Boolean(options?.includeFlashcards);
   const includeGrammar = Boolean(options?.includeGrammar);
@@ -158,6 +170,25 @@ function buildExportBundle(state, options) {
   const selectedDecks = Array.isArray(options?.selectedDecks) ? options.selectedDecks : [];
   const selectedGrammarIds = Array.isArray(options?.selectedGrammarIds) ? options.selectedGrammarIds : [];
   const selectedLibraryIds = Array.isArray(options?.selectedLibraryIds) ? options.selectedLibraryIds : [];
+  const languageDeckEntries = state.settings.customDecks.filter((deck) => deck.language === exportLanguage);
+  const selectedDeckFolders =
+    selectedDecks.length === 0
+      ? languageDeckEntries
+      : (() => {
+          const byId = new Map(languageDeckEntries.map((entry) => [entry.id, entry]));
+          const includedIds = new Set();
+          languageDeckEntries
+            .filter((entry) => entry.type !== "folder" && selectedDecks.includes(entry.name))
+            .forEach((entry) => {
+              includedIds.add(entry.id);
+              let parentId = entry.parentId || "";
+              while (parentId) {
+                includedIds.add(parentId);
+                parentId = byId.get(parentId)?.parentId || "";
+              }
+            });
+          return languageDeckEntries.filter((entry) => includedIds.has(entry.id));
+        })();
   const flashcards = includeFlashcards
     ? state.flashcards.filter(
         (card) => card.language === exportLanguage && (selectedDecks.length === 0 || selectedDecks.includes(card.deck)),
@@ -181,11 +212,7 @@ function buildExportBundle(state, options) {
     settings: {
       targetLanguage: exportLanguage,
       customLanguages: exportLanguage ? [exportLanguage] : [],
-      customDecks: includeFlashcards
-        ? state.settings.customDecks.filter(
-            (deck) => deck.language === exportLanguage && (selectedDecks.length === 0 || selectedDecks.includes(deck.name)),
-          )
-        : [],
+      customDecks: includeFlashcards ? selectedDeckFolders : [],
     },
     flashcards: flashcards.map((card) => ({
           ...card,
@@ -216,7 +243,7 @@ function hydrateImportBundle(bundle) {
       customDecks: Array.isArray(bundle.settings?.customDecks)
         ? bundle.settings.customDecks
             .filter((deck) => deck && typeof deck.language === "string" && typeof deck.name === "string")
-            .map((deck) => ({ language: deck.language, name: deck.name }))
+            .map(hydrateDeckRecord)
         : [],
     },
     flashcards: Array.isArray(bundle.flashcards) ? bundle.flashcards.map(hydrateCard) : [],
@@ -227,6 +254,10 @@ function hydrateImportBundle(bundle) {
 
 function getDeckConflictKey(entry) {
   return `${entry.language}::${entry.name}`;
+}
+
+function getTreeConflictKey(entry) {
+  return `${entry.language}::${entry.parentId || ""}::${entry.title || entry.name}`;
 }
 
 function getGrammarConflictKey(point) {
@@ -408,6 +439,7 @@ function createEmptyStats() {
   return {
     attempts: 0,
     correct: 0,
+    consecutiveCorrect: 0,
     flashcardAttempts: 0,
     multipleChoiceAttempts: 0,
     typingAttempts: 0,
@@ -494,6 +526,8 @@ function hydrateGrammarPoint(point) {
 
   return {
     id: typeof point.id === "string" ? point.id : generateId(),
+    kind: point.kind === "folder" ? "folder" : "point",
+    parentId: typeof point.parentId === "string" ? point.parentId : "",
     referenceId:
       typeof point.referenceId === "string" && point.referenceId.trim()
         ? slugify(point.referenceId)
@@ -503,7 +537,9 @@ function hydrateGrammarPoint(point) {
     summary: typeof point.summary === "string" ? point.summary : "",
     blocks: Array.isArray(point.blocks)
       ? point.blocks.map(hydrateGrammarBlock).filter((block) => block.content || block.title || block.children.length)
-      : legacyBlocks,
+      : point.kind === "folder"
+        ? []
+        : legacyBlocks,
   };
 }
 
@@ -549,6 +585,8 @@ if (!isBrowserRuntime()) {
     libraryGrammarSelection: { start: 0, end: 0, text: "" },
     activeLibraryGrammarToken: null,
     activeLibraryStyleToken: null,
+    draggingTreeItem: null,
+    collapsedTreeFolders: {},
     grammarSearch: "",
     librarySearch: "",
     deckView: "library",
@@ -556,7 +594,6 @@ if (!isBrowserRuntime()) {
     libraryView: "list",
     draftGrammarSections: [],
     studyMode: "flashcards",
-    statisticsView: "charts",
     studyFeedback: "",
     studyAnsweredCardId: "",
     typingAnswerPendingCardId: "",
@@ -580,7 +617,6 @@ if (!isBrowserRuntime()) {
 
   const elements = {
     languageTabs: document.querySelector("#language-tabs"),
-    addLanguageToggle: document.querySelector("#add-language-toggle"),
     addLanguageForm: document.querySelector("#add-language-form"),
     targetLanguageInput: document.querySelector("#target-language-input"),
     featureTabs: [...document.querySelectorAll(".feature-tab")],
@@ -597,6 +633,7 @@ if (!isBrowserRuntime()) {
     grammarBackToLibrary: document.querySelector("#grammar-back-to-library"),
     grammarEditCurrent: document.querySelector("#grammar-edit-current"),
     grammarCreateNew: document.querySelector("#grammar-create-new"),
+    grammarCreateFolder: document.querySelector("#grammar-create-folder"),
     grammarPage: document.querySelector("#grammar-page"),
     grammarList: document.querySelector("#grammar-list"),
     grammarCount: document.querySelector("#grammar-count"),
@@ -626,6 +663,7 @@ if (!isBrowserRuntime()) {
     libraryReaderMeta: document.querySelector("#library-reader-meta"),
     libraryBackToList: document.querySelector("#library-back-to-list"),
     libraryCreateNew: document.querySelector("#library-create-new"),
+    libraryCreateFolder: document.querySelector("#library-create-folder"),
     editLibraryText: document.querySelector("#edit-library-text"),
     editingLibraryNote: document.querySelector("#editing-library-note"),
     libraryEditForm: document.querySelector("#library-edit-form"),
@@ -716,7 +754,6 @@ if (!isBrowserRuntime()) {
     deckSummaryStats: document.querySelector("#deck-summary-stats"),
     deckChart: document.querySelector("#deck-chart"),
     cardStatList: document.querySelector("#card-stat-list"),
-    statisticsViewTabs: [...document.querySelectorAll("[data-stats-view]")],
     decksPanelTitle: document.querySelector("#decks-panel-title"),
     decksBackToLibrary: document.querySelector("#decks-back-to-library"),
     deckLibraryView: document.querySelector("#deck-library-view"),
@@ -743,6 +780,7 @@ if (!isBrowserRuntime()) {
     themeSelect: document.querySelector("#theme-select"),
     clearLocalData: document.querySelector("#clear-local-data"),
     createDeckForm: document.querySelector("#create-deck-form"),
+    createDeckFolder: document.querySelector("#create-deck-folder"),
     settingsDeckTitle: document.querySelector("#settings-deck-title"),
     selectedDeckMeta: document.querySelector("#selected-deck-meta"),
     renameSelectedDeckForm: document.querySelector("#rename-selected-deck-form"),
@@ -750,6 +788,8 @@ if (!isBrowserRuntime()) {
     deleteSelectedDeck: document.querySelector("#delete-selected-deck"),
     cardFormDeckLabel: document.querySelector("#card-form-deck-label"),
   };
+
+  reconcileDeckRecords();
 
   function loadFlashcards() {
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -823,7 +863,7 @@ if (!isBrowserRuntime()) {
         customDecks: Array.isArray(parsed.customDecks)
           ? parsed.customDecks
               .filter((deck) => deck && typeof deck.language === "string" && typeof deck.name === "string")
-              .map((deck) => ({ language: deck.language, name: deck.name }))
+              .map(hydrateDeckRecord)
           : [],
         theme: typeof parsed.theme === "string" ? parsed.theme : "sand",
       };
@@ -887,7 +927,7 @@ if (!isBrowserRuntime()) {
       return [];
     }
 
-    return state.grammarPoints.filter((point) => point.language === language);
+    return state.grammarPoints.filter((point) => point.language === language && point.kind !== "folder");
   }
 
   function getLibraryTextsForLanguage(language) {
@@ -895,7 +935,89 @@ if (!isBrowserRuntime()) {
       return [];
     }
 
+    return state.libraryTexts.filter((entry) => entry.language === language && entry.kind !== "folder");
+  }
+
+  function getGrammarEntriesForLanguage(language) {
+    if (!language) {
+      return [];
+    }
+
+    return state.grammarPoints.filter((point) => point.language === language);
+  }
+
+  function getLibraryEntriesForLanguage(language) {
+    if (!language) {
+      return [];
+    }
+
     return state.libraryTexts.filter((entry) => entry.language === language);
+  }
+
+  function sortTreeEntries(left, right) {
+    if ((left.kind === "folder" || left.type === "folder") !== (right.kind === "folder" || right.type === "folder")) {
+      return (left.kind === "folder" || left.type === "folder") ? -1 : 1;
+    }
+
+    return (left.title || left.name).localeCompare(right.title || right.name);
+  }
+
+  function getTreeChildren(entries, parentId = "") {
+    return entries.filter((entry) => (entry.parentId || "") === parentId).sort(sortTreeEntries);
+  }
+
+  function getTreeDescendantIds(entries, rootId) {
+    const descendants = [];
+    const stack = [rootId];
+
+    while (stack.length > 0) {
+      const currentId = stack.pop();
+      entries.forEach((entry) => {
+        if ((entry.parentId || "") === currentId) {
+          descendants.push(entry.id);
+          if (entry.kind === "folder" || entry.type === "folder") {
+            stack.push(entry.id);
+          }
+        }
+      });
+    }
+
+    return descendants;
+  }
+
+  function getTreeItemCount(entries, parentId = "") {
+    return entries.filter((entry) => (entry.parentId || "") === parentId).length;
+  }
+
+  function includeAncestorFolders(entries, filteredEntries) {
+    const byId = new Map(entries.map((entry) => [entry.id, entry]));
+    const includedIds = new Set(filteredEntries.map((entry) => entry.id));
+
+    filteredEntries.forEach((entry) => {
+      let parentId = entry.parentId || "";
+      while (parentId) {
+        includedIds.add(parentId);
+        parentId = byId.get(parentId)?.parentId || "";
+      }
+    });
+
+    return entries.filter((entry) => includedIds.has(entry.id));
+  }
+
+  function getTreeFolderStateKey(module, folderId) {
+    return `${module}::${folderId}`;
+  }
+
+  function isTreeFolderOpen(module, folderId) {
+    return !Boolean(state.collapsedTreeFolders[getTreeFolderStateKey(module, folderId)]);
+  }
+
+  function toggleTreeFolder(module, folderId) {
+    const key = getTreeFolderStateKey(module, folderId);
+    state.collapsedTreeFolders = {
+      ...state.collapsedTreeFolders,
+      [key]: isTreeFolderOpen(module, folderId),
+    };
   }
 
   function getCardsForTargetLanguage() {
@@ -910,15 +1032,49 @@ if (!isBrowserRuntime()) {
     return getLibraryTextsForLanguage(state.targetLanguage);
   }
 
+  function getGrammarEntriesForTargetLanguage() {
+    return getGrammarEntriesForLanguage(state.targetLanguage);
+  }
+
+  function getLibraryEntriesForTargetLanguage() {
+    return getLibraryEntriesForLanguage(state.targetLanguage);
+  }
+
   function getDecks(language = state.targetLanguage) {
-    return [
-      ...new Set([
-        ...state.settings.customDecks
-          .filter((deck) => deck.language === language)
-          .map((deck) => deck.name),
-        ...getCardsForLanguage(language).map((card) => card.deck),
-      ]),
-    ].sort();
+    return getDeckEntriesForLanguage(language)
+      .filter((deck) => deck.type === "deck")
+      .map((deck) => deck.name)
+      .sort((left, right) => left.localeCompare(right));
+  }
+
+  function getDeckEntriesForLanguage(language = state.targetLanguage) {
+    if (!language) {
+      return [];
+    }
+
+    const records = state.settings.customDecks.filter((deck) => deck.language === language).map(hydrateDeckRecord);
+    const deckNames = new Set(records.filter((deck) => deck.type === "deck").map((deck) => deck.name));
+
+    getCardsForLanguage(language).forEach((card) => {
+      if (!deckNames.has(card.deck)) {
+        records.push(
+          hydrateDeckRecord({
+            id: generateId(),
+            language,
+            name: card.deck,
+            type: "deck",
+            parentId: "",
+          }),
+        );
+        deckNames.add(card.deck);
+      }
+    });
+
+    return records.sort(sortTreeEntries);
+  }
+
+  function getDeckEntryByName(language, deckName) {
+    return getDeckEntriesForLanguage(language).find((deck) => deck.type === "deck" && deck.name === deckName) || null;
   }
 
   function getActiveLibraryText() {
@@ -969,7 +1125,7 @@ if (!isBrowserRuntime()) {
   }
 
   function isKnownCard(card) {
-    return card.stats.attempts >= 10 && getAccuracy(card) >= 90;
+    return (card.stats.consecutiveCorrect || 0) >= 5;
   }
 
   function getPracticeCards() {
@@ -984,21 +1140,72 @@ if (!isBrowserRuntime()) {
     return getCardsForTargetLanguage().filter((card) => card.deck === state.selectedSettingsDeck);
   }
 
-  function ensureCustomDeck(language, deckName) {
+  function ensureCustomDeck(language, deckName, parentId = "") {
     if (!language || !deckName) {
       return;
     }
 
-    const exists = state.settings.customDecks.some((deck) => deck.language === language && deck.name === deckName);
+    const exists = state.settings.customDecks.some(
+      (deck) => deck.language === language && deck.name === deckName && deck.type !== "folder",
+    );
     if (!exists) {
-      state.settings.customDecks = [...state.settings.customDecks, { language, name: deckName }];
+      state.settings.customDecks = [
+        ...state.settings.customDecks,
+        hydrateDeckRecord({ id: generateId(), language, name: deckName, type: "deck", parentId }),
+      ];
+      return;
     }
+
+    state.settings.customDecks = state.settings.customDecks.map((deck) =>
+      deck.language === language && deck.name === deckName && deck.type !== "folder"
+        ? { ...deck, parentId: deck.parentId || parentId }
+        : deck,
+    );
+  }
+
+  function createCustomDeckFolder(language, name, parentId = "") {
+    if (!language || !name) {
+      return;
+    }
+
+    state.settings.customDecks = [
+      ...state.settings.customDecks,
+      hydrateDeckRecord({ id: generateId(), language, name, type: "folder", parentId }),
+    ];
   }
 
   function removeCustomDeck(language, deckName) {
     state.settings.customDecks = state.settings.customDecks.filter(
-      (deck) => !(deck.language === language && deck.name === deckName),
+      (deck) => !(deck.language === language && deck.name === deckName && deck.type !== "folder"),
     );
+  }
+
+  function reconcileDeckRecords() {
+    let changed = false;
+    const nextRecords = [...state.settings.customDecks];
+
+    state.flashcards.forEach((card) => {
+      const exists = nextRecords.some(
+        (deck) => deck.language === card.language && deck.name === card.deck && deck.type !== "folder",
+      );
+      if (!exists) {
+        nextRecords.push(
+          hydrateDeckRecord({
+            id: generateId(),
+            language: card.language,
+            name: card.deck,
+            type: "deck",
+            parentId: "",
+          }),
+        );
+        changed = true;
+      }
+    });
+
+    if (changed) {
+      state.settings.customDecks = nextRecords;
+      persistSettings();
+    }
   }
 
   function getVisibleFlashcards() {
@@ -1849,6 +2056,7 @@ if (!isBrowserRuntime()) {
 
     targetCard.stats.attempts += 1;
     targetCard.stats.correct += isCorrect ? 1 : 0;
+    targetCard.stats.consecutiveCorrect = isCorrect ? (targetCard.stats.consecutiveCorrect || 0) + 1 : 0;
     targetCard.stats.lastPracticedAt = new Date().toISOString();
     if (mode === "flashcard") {
       targetCard.stats.flashcardAttempts += 1;
@@ -1870,6 +2078,38 @@ if (!isBrowserRuntime()) {
     stopEditingCard();
     stopEditingGrammarPoint();
     resetSession();
+    persistSettings();
+  }
+
+  function deleteLanguage(language) {
+    const targetLanguage = language.toString().trim();
+    if (!targetLanguage) {
+      return;
+    }
+
+    state.flashcards = state.flashcards.filter((card) => card.language !== targetLanguage);
+    state.grammarPoints = state.grammarPoints.filter((point) => point.language !== targetLanguage);
+    state.libraryTexts = state.libraryTexts.filter((entry) => entry.language !== targetLanguage);
+    state.settings.customDecks = state.settings.customDecks.filter((deck) => deck.language !== targetLanguage);
+    state.settings.customLanguages = state.settings.customLanguages.filter((entry) => entry !== targetLanguage);
+
+    const remainingLanguages = getLanguages().filter((entry) => entry !== targetLanguage);
+    state.targetLanguage = remainingLanguages[0] || "";
+    state.settings.targetLanguage = state.targetLanguage;
+    state.activeDeck = ALL_DECKS;
+    state.activeGrammarId = "";
+    state.activeLibraryTextId = "";
+    state.selectedSettingsDeck = "";
+    state.deckView = "library";
+    state.libraryView = "list";
+    state.grammarView = "library";
+    stopEditingCard();
+    stopEditingGrammarPoint();
+    stopEditingLibraryText();
+    resetSession();
+    persistFlashcards();
+    persistGrammarPoints();
+    persistLibraryTexts();
     persistSettings();
   }
 
@@ -2104,21 +2344,58 @@ if (!isBrowserRuntime()) {
     elements.languageTabs.innerHTML = "";
 
     if (languages.length === 0) {
-      elements.languageTabs.innerHTML = `<p class="list-meta">No languages yet. Add one to start shaping the app.</p>`;
-      return;
+      elements.languageTabs.innerHTML = `<p class="list-meta">No languages yet.</p>`;
     }
 
     languages.forEach((language) => {
+      const item = document.createElement("div");
+      item.className = `language-tab${language === state.targetLanguage ? " is-active" : ""}`;
+
       const button = document.createElement("button");
       button.type = "button";
-      button.className = `language-tab${language === state.targetLanguage ? " is-active" : ""}`;
+      button.className = "language-tab-label";
       button.textContent = language;
       button.addEventListener("click", () => {
         setTargetLanguage(language);
         render();
       });
-      elements.languageTabs.append(button);
+
+      const deleteButton = document.createElement("button");
+      deleteButton.type = "button";
+      deleteButton.className = "language-tab-delete";
+      deleteButton.setAttribute("aria-label", `Delete ${language}`);
+      deleteButton.textContent = "x";
+      deleteButton.addEventListener("click", () => {
+        const cardsCount = getCardsForLanguage(language).length;
+        const grammarCount = getGrammarForLanguage(language).length;
+        const textsCount = getLibraryTextsForLanguage(language).length;
+        const shouldDelete = window.confirm(
+          `Delete ${language} and all its data?\n\nThis will remove ${cardsCount} cards, ${grammarCount} grammar points, ${textsCount} texts, and its decks on this device.`,
+        );
+        if (!shouldDelete) {
+          return;
+        }
+
+        deleteLanguage(language);
+        render();
+      });
+
+      item.append(button, deleteButton);
+      elements.languageTabs.append(item);
     });
+
+    const addButton = document.createElement("button");
+    addButton.type = "button";
+    addButton.className = "language-tab language-tab-add";
+    addButton.textContent = "+";
+    addButton.setAttribute("aria-label", "Add language");
+    addButton.addEventListener("click", () => {
+      elements.addLanguageForm.classList.toggle("is-open");
+      if (elements.addLanguageForm.classList.contains("is-open")) {
+        elements.targetLanguageInput.focus();
+      }
+    });
+    elements.languageTabs.append(addButton);
   }
 
   function renderTabs() {
@@ -2394,12 +2671,6 @@ if (!isBrowserRuntime()) {
     elements.typingAnswerLabel.classList.add("hidden");
   }
 
-  function renderStatisticsViewTabs() {
-    elements.statisticsViewTabs.forEach((tab) => {
-      tab.classList.toggle("is-active", tab.dataset.statsView === state.statisticsView);
-    });
-  }
-
   function renderStudyMode() {
     const currentCard = getCurrentCard();
     const isFlashcards = state.studyMode === "flashcards";
@@ -2542,7 +2813,6 @@ if (!isBrowserRuntime()) {
   }
 
   function renderStatistics() {
-    renderStatisticsViewTabs();
     const currentLanguageCards = getCardsForTargetLanguage();
     const exportLanguages = getLanguages();
     const selectedExportLanguage =
@@ -2578,14 +2848,7 @@ if (!isBrowserRuntime()) {
           },
         ]
       : [];
-    elements.languageChart.innerHTML =
-      state.statisticsView === "charts"
-        ? createBarChartRows(languageRows, "No language statistics yet.")
-        : createTableRows(
-            ["Language", "Known"],
-            languageRows.map((row) => [row.label, row.valueLabel]),
-            "No language statistics yet.",
-          );
+    elements.languageChart.innerHTML = createBarChartRows(languageRows, "No language statistics yet.");
 
     const deckRows = getDecks().map((deck) => {
       const cards = currentLanguageCards.filter((card) => card.deck === deck);
@@ -2593,7 +2856,7 @@ if (!isBrowserRuntime()) {
       const percent = Math.round((knownCards / Math.max(1, cards.length)) * 100);
       return {
         label: deck,
-        valueLabel: `${percent}% known`,
+        valueLabel: `${knownCards}/${cards.length} known`,
         percent,
       };
     });
@@ -2609,14 +2872,7 @@ if (!isBrowserRuntime()) {
         "Average card accuracy",
       ),
     ].join("");
-    elements.deckChart.innerHTML =
-      state.statisticsView === "charts"
-        ? createBarChartRows(deckRows, "No deck statistics yet.")
-        : createTableRows(
-            ["Deck", "Mastery"],
-            deckRows.map((row) => [row.label, row.valueLabel]),
-            "No deck statistics yet.",
-          );
+    elements.deckChart.innerHTML = createBarChartRows(deckRows, "No deck statistics yet.");
 
     const cardRows = currentLanguageCards
       .slice()
@@ -2627,45 +2883,224 @@ if (!isBrowserRuntime()) {
         return getAccuracy(right) - getAccuracy(left) || right.stats.attempts - left.stats.attempts;
       });
 
-    elements.cardStatList.innerHTML =
-      state.statisticsView === "charts"
-        ? cardRows.length
-          ? cardRows
-              .map(
-                (card) => `
-                  <div class="mini-row">
-                    <strong>${renderHighlightedText(card.prompt)}</strong>
-                    <span>${card.deck} · ${card.stats.attempts} practices · ${getAccuracy(card)}% correct</span>
-                  </div>
-                `,
-              )
-              .join("")
-          : `<p class="list-meta">No card statistics yet.</p>`
-        : createTableRows(
-            ["Card", "Performance"],
-            cardRows.map((card) => [
-              stripAnnotationMarkup(card.prompt),
-              `${card.deck} · ${card.stats.attempts} practices · ${getAccuracy(card)}% correct`,
-            ]),
-            "No card statistics yet.",
-          );
+    elements.cardStatList.innerHTML = cardRows.length
+      ? cardRows
+          .map(
+            (card) => `
+              <div class="mini-row">
+                <strong>${renderHighlightedText(card.prompt)}</strong>
+                <span>${card.deck} · ${card.stats.attempts} practices · ${getAccuracy(card)}% correct</span>
+              </div>
+            `,
+          )
+          .join("")
+      : `<p class="list-meta">No card statistics yet.</p>`;
+  }
+
+  function canMoveTreeEntry(entries, entryId, nextParentId) {
+    if (entryId === nextParentId) {
+      return false;
+    }
+
+    const entry = entries.find((item) => item.id === entryId);
+    if (!entry) {
+      return false;
+    }
+
+    if ((entry.kind === "folder" || entry.type === "folder") && nextParentId) {
+      return !getTreeDescendantIds(entries, entryId).includes(nextParentId);
+    }
+
+    return true;
+  }
+
+  function attachTreeDragAndDrop(container, module) {
+    if (!container) {
+      return;
+    }
+
+    [...container.querySelectorAll("[data-tree-module]")].forEach((item) => {
+      item.addEventListener("dragstart", (event) => {
+        state.draggingTreeItem = {
+          module,
+          id: item.dataset.treeId,
+          type: item.dataset.treeType,
+        };
+        event.dataTransfer.effectAllowed = "move";
+        item.classList.add("is-dragging");
+      });
+
+      item.addEventListener("dragend", () => {
+        state.draggingTreeItem = null;
+        container.querySelectorAll(".is-drop-target").forEach((target) => target.classList.remove("is-drop-target"));
+        item.classList.remove("is-dragging");
+      });
+    });
+
+    [...container.querySelectorAll("[data-drop-parent]")].forEach((zone) => {
+      zone.addEventListener("dragover", (event) => {
+        if (!state.draggingTreeItem || state.draggingTreeItem.module !== module) {
+          return;
+        }
+
+        event.preventDefault();
+        zone.classList.add("is-drop-target");
+      });
+
+      zone.addEventListener("dragleave", () => {
+        zone.classList.remove("is-drop-target");
+      });
+
+      zone.addEventListener("drop", (event) => {
+        if (!state.draggingTreeItem || state.draggingTreeItem.module !== module) {
+          return;
+        }
+
+        event.preventDefault();
+        zone.classList.remove("is-drop-target");
+        const nextParentId = zone.dataset.dropParent || "";
+
+        if (module === "grammar") {
+          moveGrammarEntry(state.draggingTreeItem.id, nextParentId);
+        } else if (module === "library") {
+          moveLibraryEntry(state.draggingTreeItem.id, nextParentId);
+        } else if (module === "deck") {
+          moveDeckEntry(state.draggingTreeItem.id, nextParentId);
+        }
+      });
+    });
+  }
+
+  function moveGrammarEntry(entryId, nextParentId) {
+    if (!canMoveTreeEntry(state.grammarPoints, entryId, nextParentId)) {
+      return;
+    }
+
+    state.grammarPoints = state.grammarPoints.map((entry) =>
+      entry.id === entryId ? { ...entry, parentId: nextParentId } : entry,
+    );
+    persistGrammarPoints();
+    renderGrammar();
+  }
+
+  function moveLibraryEntry(entryId, nextParentId) {
+    if (!canMoveTreeEntry(state.libraryTexts, entryId, nextParentId)) {
+      return;
+    }
+
+    state.libraryTexts = state.libraryTexts.map((entry) =>
+      entry.id === entryId ? { ...entry, parentId: nextParentId } : entry,
+    );
+    persistLibraryTexts();
+    renderLibrary();
+  }
+
+  function moveDeckEntry(entryId, nextParentId) {
+    if (!canMoveTreeEntry(state.settings.customDecks, entryId, nextParentId)) {
+      return;
+    }
+
+    state.settings.customDecks = state.settings.customDecks.map((entry) =>
+      entry.id === entryId ? { ...entry, parentId: nextParentId } : entry,
+    );
+    persistSettings();
+    renderDeckSummary();
+  }
+
+  function deleteGrammarFolder(folderId) {
+    const folder = state.grammarPoints.find((entry) => entry.id === folderId && entry.kind === "folder");
+    if (!folder) {
+      return;
+    }
+
+    if (getTreeItemCount(state.grammarPoints, folder.id) > 0) {
+      window.alert("Move or remove the items inside this folder before deleting it.");
+      return;
+    }
+
+    if (!window.confirm(`Delete folder ${folder.title}?`)) {
+      return;
+    }
+
+    state.grammarPoints = state.grammarPoints.filter((entry) => entry.id !== folderId);
+    persistGrammarPoints();
+    renderGrammar();
+  }
+
+  function deleteLibraryFolder(folderId) {
+    const folder = state.libraryTexts.find((entry) => entry.id === folderId && entry.kind === "folder");
+    if (!folder) {
+      return;
+    }
+
+    if (getTreeItemCount(state.libraryTexts, folder.id) > 0) {
+      window.alert("Move or remove the items inside this folder before deleting it.");
+      return;
+    }
+
+    if (!window.confirm(`Delete folder ${folder.title}?`)) {
+      return;
+    }
+
+    state.libraryTexts = state.libraryTexts.filter((entry) => entry.id !== folderId);
+    persistLibraryTexts();
+    renderLibrary();
+  }
+
+  function deleteDeckFolder(folderId) {
+    const folder = state.settings.customDecks.find((entry) => entry.id === folderId && entry.type === "folder");
+    if (!folder) {
+      return;
+    }
+
+    if (getTreeItemCount(state.settings.customDecks, folder.id) > 0) {
+      window.alert("Move or remove the items inside this folder before deleting it.");
+      return;
+    }
+
+    if (!window.confirm(`Delete folder ${folder.name}?`)) {
+      return;
+    }
+
+    state.settings.customDecks = state.settings.customDecks.filter((entry) => entry.id !== folderId);
+    persistSettings();
+    renderDeckSummary();
+  }
+
+  function promptForFolderName(moduleLabel) {
+    return window.prompt(`New ${moduleLabel} folder name:`)?.trim() || "";
   }
 
   function renderLibrary() {
-    const texts = getLibraryTextsForTargetLanguage();
+    const entries = getLibraryEntriesForTargetLanguage();
+    const texts = entries.filter((entry) => entry.kind !== "folder");
     const libraryQuery = normalizeSearchText(state.librarySearch);
-    const filteredTexts = libraryQuery
-      ? texts.filter((entry) =>
-          normalizeSearchText([entry.title, entry.tags.join(" "), entry.text].filter(Boolean).join(" ")).includes(libraryQuery),
+    const filteredEntries = libraryQuery
+      ? includeAncestorFolders(
+          entries,
+          entries.filter((entry) =>
+            normalizeSearchText(
+              [
+                entry.title,
+                Array.isArray(entry.tags) ? entry.tags.join(" ") : "",
+                entry.kind === "folder" ? "" : entry.text,
+              ]
+                .filter(Boolean)
+                .join(" "),
+            ).includes(libraryQuery),
+          ),
         )
-      : texts;
+      : entries;
     const activeText = getActiveLibraryText();
     const editingText = getEditingLibraryText();
     const unreadCount = texts.filter((entry) => entry.status === "unread").length;
     const readingCount = texts.filter((entry) => entry.status === "reading").length;
     const finishedCount = texts.filter((entry) => entry.status === "finished").length;
+    const folderCount = entries.filter((entry) => entry.kind === "folder").length;
 
-    elements.libraryCount.textContent = state.targetLanguage ? `${texts.length} texts` : "0 texts";
+    elements.libraryCount.textContent = state.targetLanguage
+      ? `${texts.length} texts${folderCount ? ` · ${folderCount} folders` : ""}`
+      : "0 texts";
     elements.librarySearchInput.value = state.librarySearch;
     elements.libraryCaptureBody.classList.toggle("hidden", state.libraryCaptureCollapsed);
     elements.toggleLibraryCapture.textContent = state.libraryCaptureCollapsed ? "Show" : "Hide";
@@ -2676,6 +3111,7 @@ if (!isBrowserRuntime()) {
     elements.libraryBackToList.classList.toggle("hidden", state.libraryView === "list");
     elements.editLibraryText.classList.toggle("hidden", state.libraryView !== "reader" || !activeText);
     elements.libraryCreateNew.classList.toggle("hidden", state.libraryView !== "list");
+    elements.libraryCreateFolder.classList.toggle("hidden", state.libraryView !== "list");
 
     if (!state.targetLanguage) {
       elements.libraryPanelTitle.textContent = "Text library";
@@ -2700,6 +3136,7 @@ if (!isBrowserRuntime()) {
       elements.editLibraryText.classList.add("hidden");
       elements.deleteLibraryText.classList.add("hidden");
       elements.libraryCreateNew.classList.remove("hidden");
+      elements.libraryCreateFolder.classList.remove("hidden");
       return;
     }
 
@@ -2717,36 +3154,59 @@ if (!isBrowserRuntime()) {
 
     elements.librarySummaryStats.innerHTML = [
       createMetricCard(texts.length, "Texts"),
+      createMetricCard(folderCount, "Folders"),
       createMetricCard(readingCount, "Currently reading"),
       createMetricCard(finishedCount, "Finished"),
     ].join("");
 
-    elements.libraryList.innerHTML = filteredTexts.length
-      ? filteredTexts
-          .slice()
-          .sort((left, right) => left.title.localeCompare(right.title))
-          .map(
-            (entry) => `
-              <article class="library-list-item${entry.id === state.activeLibraryTextId ? " is-active" : ""}" tabindex="0" data-library-id="${entry.id}">
-                <div>
-                  <strong>${escapeHtml(entry.title)}</strong>
-                  <p>${escapeHtml(entry.detectedLanguage || entry.language)} · ${escapeHtml(entry.difficulty)} · ${entry.progress}% read</p>
-                  ${renderTagChips(entry.tags)}
-                </div>
-                <span class="library-state state-${entry.status}">${escapeHtml(entry.status)}</span>
-              </article>
-            `,
-          )
-          .join("")
+    const renderLibraryTree = (parentId = "", depth = 0) =>
+      getTreeChildren(filteredEntries, parentId)
+        .map((entry) => {
+          if (entry.kind === "folder") {
+            const isOpen = isTreeFolderOpen("library", entry.id);
+            return `
+              <section class="tree-node">
+                <article class="tree-item folder-list-item${isOpen ? " is-open" : ""}" tabindex="0" draggable="true" data-tree-module="library" data-tree-id="${entry.id}" data-tree-type="folder" data-drop-parent="${entry.id}" style="--tree-depth:${depth}">
+                  <div>
+                    <strong>${isOpen ? "▾" : "▸"} ${escapeHtml(entry.title)}</strong>
+                    <p>${getTreeItemCount(entries, entry.id)} items</p>
+                  </div>
+                  <div class="list-actions">
+                    <button class="ghost delete-library-folder" type="button" data-library-folder-id="${entry.id}">Delete</button>
+                  </div>
+                </article>
+                <div class="tree-children${isOpen ? "" : " hidden"}">${renderLibraryTree(entry.id, depth + 1)}</div>
+              </section>
+            `;
+          }
+
+          return `
+            <article class="library-list-item tree-item${entry.id === state.activeLibraryTextId ? " is-active" : ""}" tabindex="0" draggable="true" data-tree-module="library" data-tree-id="${entry.id}" data-tree-type="text" style="--tree-depth:${depth}">
+              <div>
+                <strong>${escapeHtml(entry.title)}</strong>
+                <p>${escapeHtml(entry.detectedLanguage || entry.language)} · ${escapeHtml(entry.difficulty)} · ${entry.progress}% read</p>
+                ${renderTagChips(entry.tags)}
+              </div>
+              <span class="library-state state-${entry.status}">${escapeHtml(entry.status)}</span>
+            </article>
+          `;
+        })
+        .join("");
+
+    elements.libraryList.innerHTML = filteredEntries.length
+      ? `
+          <div class="tree-drop-root" data-tree-module="library" data-drop-parent="">Drop here to move to root</div>
+          ${renderLibraryTree()}
+        `
       : `<p class="list-meta">${
           texts.length
             ? `No texts match "${escapeHtml(state.librarySearch)}".`
             : `No texts yet for ${state.targetLanguage}. Import one to start building the library.`
         }</p>`;
 
-    [...elements.libraryList.querySelectorAll("[data-library-id]")].forEach((item) => {
+    [...elements.libraryList.querySelectorAll("[data-tree-type='text']")].forEach((item) => {
       const openEntry = () => {
-        state.activeLibraryTextId = item.dataset.libraryId;
+        state.activeLibraryTextId = item.dataset.treeId;
         state.libraryView = "reader";
         renderLibrary();
       };
@@ -2759,6 +3219,33 @@ if (!isBrowserRuntime()) {
         }
       });
     });
+
+    [...elements.libraryList.querySelectorAll(".delete-library-folder")].forEach((button) => {
+      button.addEventListener("click", (event) => {
+        event.stopPropagation();
+        deleteLibraryFolder(button.dataset.libraryFolderId);
+      });
+    });
+
+    [...elements.libraryList.querySelectorAll(".folder-list-item[data-tree-module='library']")].forEach((item) => {
+      const toggle = (event) => {
+        if (event.target.closest(".delete-library-folder")) {
+          return;
+        }
+        toggleTreeFolder("library", item.dataset.treeId);
+        renderLibrary();
+      };
+
+      item.addEventListener("click", toggle);
+      item.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          toggle(event);
+        }
+      });
+    });
+
+    attachTreeDragAndDrop(elements.libraryList, "library");
 
     if (!activeText) {
       elements.libraryPanelTitle.textContent = "Text library";
@@ -2837,14 +3324,18 @@ if (!isBrowserRuntime()) {
   }
 
   function renderGrammar() {
-    const points = getGrammarForTargetLanguage();
+    const entries = getGrammarEntriesForTargetLanguage();
+    const points = entries.filter((point) => point.kind !== "folder");
     const grammarQuery = normalizeSearchText(state.grammarSearch);
     const filteredPoints = grammarQuery
-      ? points
+      ? includeAncestorFolders(
+          entries,
+          entries
           .map((point) => {
             const titleText = normalizeSearchText(point.title);
             const summaryText = normalizeSearchText(point.summary);
-            const contentText = normalizeSearchText(point.blocks.map(flattenGrammarBlockText).join(" "));
+            const contentText =
+              point.kind === "folder" ? "" : normalizeSearchText(point.blocks.map(flattenGrammarBlockText).join(" "));
             const titleIndex = titleText.indexOf(grammarQuery);
             const summaryIndex = summaryText.indexOf(grammarQuery);
             const contentIndex = contentText.indexOf(grammarQuery);
@@ -2872,10 +3363,14 @@ if (!isBrowserRuntime()) {
               left.point.title.localeCompare(right.point.title),
           )
           .map((entry) => entry.point)
-      : points;
+        )
+      : entries;
     const activePoint = getActiveGrammarPoint();
+    const folderCount = entries.filter((entry) => entry.kind === "folder").length;
 
-    elements.grammarCount.textContent = state.targetLanguage ? `${points.length} points` : "0 points";
+    elements.grammarCount.textContent = state.targetLanguage
+      ? `${points.length} points${folderCount ? ` · ${folderCount} folders` : ""}`
+      : "0 points";
     elements.grammarSearchInput.value = state.grammarSearch;
     elements.grammarLibraryView.classList.toggle("hidden", state.grammarView !== "library");
     elements.grammarPageView.classList.toggle("hidden", state.grammarView !== "page");
@@ -2885,6 +3380,7 @@ if (!isBrowserRuntime()) {
       "hidden",
       state.grammarView !== "page" || !activePoint,
     );
+    elements.grammarCreateFolder.classList.toggle("hidden", state.grammarView !== "library");
 
     if (!state.targetLanguage) {
       elements.grammarPanelTitle.textContent = "Grammar library";
@@ -2907,23 +3403,47 @@ if (!isBrowserRuntime()) {
       elements.grammarPanelTitle.textContent = activePoint?.title || "Grammar point";
     }
 
+    const renderGrammarTree = (parentId = "", depth = 0) =>
+      getTreeChildren(filteredPoints, parentId)
+        .map((point) => {
+          if (point.kind === "folder") {
+            const isOpen = isTreeFolderOpen("grammar", point.id);
+            return `
+              <section class="tree-node">
+                <article class="tree-item folder-list-item${isOpen ? " is-open" : ""}" tabindex="0" draggable="true" data-tree-module="grammar" data-tree-id="${point.id}" data-tree-type="folder" data-drop-parent="${point.id}" style="--tree-depth:${depth}">
+                  <div>
+                    <strong>${isOpen ? "▾" : "▸"} ${escapeHtml(point.title)}</strong>
+                    <p>${getTreeItemCount(entries, point.id)} items</p>
+                  </div>
+                  <div class="list-actions">
+                    <button class="ghost delete-grammar-folder" type="button" data-grammar-folder-id="${point.id}">Delete</button>
+                  </div>
+                </article>
+                <div class="tree-children${isOpen ? "" : " hidden"}">${renderGrammarTree(point.id, depth + 1)}</div>
+              </section>
+            `;
+          }
+
+          return `
+            <article class="grammar-list-item tree-item${point.id === state.activeGrammarId ? " is-active" : ""}" tabindex="0" draggable="true" data-tree-module="grammar" data-tree-id="${point.id}" data-tree-type="point" style="--tree-depth:${depth}">
+              <div>
+                <strong>${escapeHtml(point.title)}</strong>
+                <p>${escapeHtml(point.summary)}</p>
+              </div>
+              <div class="list-actions">
+                <button class="secondary edit-grammar" type="button" data-grammar-id="${point.id}">Edit</button>
+                <button class="ghost delete-grammar" type="button" data-grammar-id="${point.id}">Delete</button>
+              </div>
+            </article>
+          `;
+        })
+        .join("");
+
     elements.grammarList.innerHTML = filteredPoints.length
-      ? filteredPoints
-          .map(
-            (point) => `
-              <article class="grammar-list-item${point.id === state.activeGrammarId ? " is-active" : ""}" tabindex="0" data-grammar-id="${point.id}">
-                <div>
-                  <strong>${escapeHtml(point.title)}</strong>
-                  <p>${escapeHtml(point.summary)}</p>
-                </div>
-                <div class="list-actions">
-                  <button class="secondary edit-grammar" type="button" data-grammar-id="${point.id}">Edit</button>
-                  <button class="ghost delete-grammar" type="button" data-grammar-id="${point.id}">Delete</button>
-                </div>
-              </article>
-            `,
-          )
-          .join("")
+      ? `
+          <div class="tree-drop-root" data-tree-module="grammar" data-drop-parent="">Drop here to move to root</div>
+          ${renderGrammarTree()}
+        `
       : `<p class="list-meta">${
           points.length
             ? `No grammar points match "${escapeHtml(state.grammarSearch)}".`
@@ -2932,7 +3452,7 @@ if (!isBrowserRuntime()) {
 
     [...elements.grammarList.querySelectorAll(".grammar-list-item")].forEach((item) => {
       const openPoint = () => {
-        state.activeGrammarId = item.dataset.grammarId;
+        state.activeGrammarId = item.dataset.treeId;
         state.grammarView = "page";
         renderGrammar();
       };
@@ -2967,6 +3487,33 @@ if (!isBrowserRuntime()) {
         deleteGrammarPoint(button.dataset.grammarId);
       });
     });
+
+    [...elements.grammarList.querySelectorAll(".delete-grammar-folder")].forEach((button) => {
+      button.addEventListener("click", (event) => {
+        event.stopPropagation();
+        deleteGrammarFolder(button.dataset.grammarFolderId);
+      });
+    });
+
+    [...elements.grammarList.querySelectorAll(".folder-list-item[data-tree-module='grammar']")].forEach((item) => {
+      const toggle = (event) => {
+        if (event.target.closest(".delete-grammar-folder")) {
+          return;
+        }
+        toggleTreeFolder("grammar", item.dataset.treeId);
+        renderGrammar();
+      };
+
+      item.addEventListener("click", toggle);
+      item.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          toggle(event);
+        }
+      });
+    });
+
+    attachTreeDragAndDrop(elements.grammarList, "grammar");
 
     if (!activePoint) {
       elements.grammarPage.innerHTML = `<p class="list-meta">Create your first grammar point for ${state.targetLanguage}.</p>`;
@@ -3053,8 +3600,12 @@ if (!isBrowserRuntime()) {
   }
 
   function renderDeckSummary() {
-    const decks = getDecks();
-    elements.deckCount.textContent = state.targetLanguage ? `${decks.length} decks` : "0 decks";
+    const entries = getDeckEntriesForLanguage();
+    const decks = entries.filter((deck) => deck.type === "deck");
+    const folderCount = entries.filter((deck) => deck.type === "folder").length;
+    elements.deckCount.textContent = state.targetLanguage
+      ? `${decks.length} decks${folderCount ? ` · ${folderCount} folders` : ""}`
+      : "0 decks";
     elements.deckLibraryView.classList.toggle("hidden", state.deckView !== "library");
     elements.deckPageView.classList.toggle("hidden", state.deckView !== "page");
     elements.decksBackToLibrary.classList.toggle("hidden", state.deckView === "library");
@@ -3069,7 +3620,7 @@ if (!isBrowserRuntime()) {
       return;
     }
 
-    if (decks.length === 0) {
+    if (entries.length === 0) {
       elements.decksPanelTitle.textContent = "";
       elements.deckSummary.innerHTML = `<p class="list-meta">No decks exist yet for ${state.targetLanguage}. Add cards below to create one.</p>`;
       elements.settingsDeckTitle.textContent = "Deck workspace";
@@ -3081,23 +3632,45 @@ if (!isBrowserRuntime()) {
 
     elements.decksPanelTitle.textContent = "";
 
+    const renderDeckTree = (parentId = "", depth = 0) =>
+      getTreeChildren(entries, parentId)
+        .map((entry) => {
+          if (entry.type === "folder") {
+            const isOpen = isTreeFolderOpen("deck", entry.id);
+            return `
+              <section class="tree-node">
+                <article class="tree-item folder-list-item${isOpen ? " is-open" : ""}" tabindex="0" draggable="true" data-tree-module="deck" data-tree-id="${entry.id}" data-tree-type="folder" data-drop-parent="${entry.id}" style="--tree-depth:${depth}">
+                  <div>
+                    <strong>${isOpen ? "▾" : "▸"} ${escapeHtml(entry.name)}</strong>
+                    <p>${getTreeItemCount(entries, entry.id)} items</p>
+                  </div>
+                  <div class="list-actions">
+                    <button class="ghost delete-deck-folder" type="button" data-deck-folder-id="${entry.id}">Delete</button>
+                  </div>
+                </article>
+                <div class="tree-children${isOpen ? "" : " hidden"}">${renderDeckTree(entry.id, depth + 1)}</div>
+              </section>
+            `;
+          }
+
+          const cards = getCardsForTargetLanguage().filter((card) => card.deck === entry.name);
+          const studied = cards.filter((card) => card.stats.attempts > 0).length;
+          const known = cards.filter(isKnownCard).length;
+          return `
+            <button class="deck-table-row settings-deck-row tree-item${entry.name === state.selectedSettingsDeck ? " is-active" : ""}" type="button" draggable="true" data-tree-module="deck" data-tree-id="${entry.id}" data-tree-type="deck" data-settings-deck="${escapeHtml(entry.name)}" style="--tree-depth:${depth}">
+              <span>${escapeHtml(entry.name)}</span>
+              <span>${cards.length} cards</span>
+              <span>${studied} studied</span>
+              <span>${known} known</span>
+            </button>
+          `;
+        })
+        .join("");
+
     elements.deckSummary.innerHTML = `
       <div class="deck-table settings-deck-list">
-        ${decks
-          .map((deck) => {
-            const cards = getCardsForTargetLanguage().filter((card) => card.deck === deck);
-            const studied = cards.filter((card) => card.stats.attempts > 0).length;
-            const known = cards.filter(isKnownCard).length;
-            return `
-              <button class="deck-table-row settings-deck-row${deck === state.selectedSettingsDeck ? " is-active" : ""}" type="button" data-settings-deck="${deck}">
-                <span>${deck}</span>
-                <span>${cards.length} cards</span>
-                <span>${studied} studied</span>
-                <span>${known} known</span>
-              </button>
-            `;
-          })
-          .join("")}
+        <div class="tree-drop-root" data-tree-module="deck" data-drop-parent="">Drop here to move to root</div>
+        ${renderDeckTree()}
       </div>
     `;
 
@@ -3109,6 +3682,33 @@ if (!isBrowserRuntime()) {
         render();
       });
     });
+
+    [...elements.deckSummary.querySelectorAll(".delete-deck-folder")].forEach((button) => {
+      button.addEventListener("click", (event) => {
+        event.stopPropagation();
+        deleteDeckFolder(button.dataset.deckFolderId);
+      });
+    });
+
+    [...elements.deckSummary.querySelectorAll(".folder-list-item[data-tree-module='deck']")].forEach((item) => {
+      const toggle = (event) => {
+        if (event.target.closest(".delete-deck-folder")) {
+          return;
+        }
+        toggleTreeFolder("deck", item.dataset.treeId);
+        renderDeckSummary();
+      };
+
+      item.addEventListener("click", toggle);
+      item.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          toggle(event);
+        }
+      });
+    });
+
+    attachTreeDragAndDrop(elements.deckSummary, "deck");
 
     elements.settingsDeckTitle.textContent = state.selectedSettingsDeck || "Deck workspace";
     elements.selectedDeckMeta.textContent = state.selectedSettingsDeck
@@ -3266,9 +3866,12 @@ if (!isBrowserRuntime()) {
   }
 
   function renameDeck(sourceDeck, nextDeck) {
-    ensureCustomDeck(state.targetLanguage, nextDeck);
+    const existingEntry = getDeckEntryByName(state.targetLanguage, sourceDeck);
+    ensureCustomDeck(state.targetLanguage, nextDeck, existingEntry?.parentId || "");
     state.settings.customDecks = state.settings.customDecks.map((deck) =>
-      deck.language === state.targetLanguage && deck.name === sourceDeck ? { ...deck, name: nextDeck } : deck,
+      deck.language === state.targetLanguage && deck.name === sourceDeck && deck.type !== "folder"
+        ? { ...deck, name: nextDeck }
+        : deck,
     );
     state.flashcards = state.flashcards.map((card) =>
       card.language === state.targetLanguage && card.deck === sourceDeck ? { ...card, deck: nextDeck } : card,
@@ -3335,7 +3938,9 @@ if (!isBrowserRuntime()) {
     };
 
     let nextFlashcards = [...state.flashcards];
-    const currentDeckKeys = new Set(state.settings.customDecks.map(getDeckConflictKey));
+    const currentDeckKeys = new Set(
+      state.settings.customDecks.filter((deck) => deck.type !== "folder").map(getDeckConflictKey),
+    );
     state.flashcards.forEach((card) => currentDeckKeys.add(getDeckConflictKey({ language: card.language, name: card.deck })));
 
     const importedDeckMap = new Map();
@@ -3346,7 +3951,7 @@ if (!isBrowserRuntime()) {
       }
       importedDeckMap.get(key).push(card);
     });
-    bundle.settings.customDecks.forEach((deck) => {
+    bundle.settings.customDecks.filter((deck) => deck.type !== "folder").forEach((deck) => {
       const key = getDeckConflictKey(deck);
       if (!importedDeckMap.has(key)) {
         importedDeckMap.set(key, []);
@@ -3367,10 +3972,27 @@ if (!isBrowserRuntime()) {
       nextFlashcards = nextFlashcards.filter((card) => !(card.language === language && card.deck === deckName));
       nextFlashcards = [...cards, ...nextFlashcards];
       nextSettings.customDecks = [
-        ...nextSettings.customDecks.filter((deck) => !(deck.language === language && deck.name === deckName)),
-        { language, name: deckName },
+        ...nextSettings.customDecks.filter(
+          (deck) => !(deck.language === language && deck.name === deckName && deck.type !== "folder"),
+        ),
+        hydrateDeckRecord({ language, name: deckName, type: "deck" }),
       ];
     });
+
+    bundle.settings.customDecks
+      .filter((deck) => deck.type === "folder")
+      .forEach((folder) => {
+        const exists = nextSettings.customDecks.some(
+          (entry) =>
+            entry.type === "folder" &&
+            entry.language === folder.language &&
+            entry.name === folder.name &&
+            (entry.parentId || "") === (folder.parentId || ""),
+        );
+        if (!exists) {
+          nextSettings.customDecks = [...nextSettings.customDecks, hydrateDeckRecord(folder)];
+        }
+      });
 
     let nextGrammarPoints = [...state.grammarPoints];
     bundle.grammarPoints.forEach((point) => {
@@ -3459,13 +4081,6 @@ if (!isBrowserRuntime()) {
     );
     persistLibraryTexts();
   }
-
-  elements.addLanguageToggle.addEventListener("click", () => {
-    elements.addLanguageForm.classList.toggle("is-open");
-    if (elements.addLanguageForm.classList.contains("is-open")) {
-      elements.targetLanguageInput.focus();
-    }
-  });
 
   elements.addLanguageForm.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -3601,13 +4216,6 @@ if (!isBrowserRuntime()) {
     });
   });
 
-  elements.statisticsViewTabs.forEach((tab) => {
-    tab.addEventListener("click", () => {
-      state.statisticsView = tab.dataset.statsView;
-      renderStatistics();
-    });
-  });
-
   elements.deckFilter.addEventListener("change", (event) => {
     state.activeDeck = event.target.value;
     resetSession();
@@ -3731,6 +4339,20 @@ if (!isBrowserRuntime()) {
     event.currentTarget.reset();
     render();
   });
+  elements.createDeckFolder.addEventListener("click", () => {
+    if (!state.targetLanguage) {
+      return;
+    }
+
+    const folderName = promptForFolderName("deck");
+    if (!folderName) {
+      return;
+    }
+
+    createCustomDeckFolder(state.targetLanguage, folderName);
+    persistSettings();
+    renderDeckSummary();
+  });
   elements.decksBackToLibrary.addEventListener("click", () => {
     stopEditingCard();
     state.deckView = "library";
@@ -3747,6 +4369,29 @@ if (!isBrowserRuntime()) {
     elements.libraryImportStatus.textContent = "Imports are cleaned automatically. PDF extraction is best effort.";
     state.libraryView = "import";
     render();
+  });
+  elements.libraryCreateFolder.addEventListener("click", () => {
+    if (!state.targetLanguage) {
+      return;
+    }
+
+    const folderName = promptForFolderName("library");
+    if (!folderName) {
+      return;
+    }
+
+    state.libraryTexts = [
+      hydrateLibraryText({
+        id: generateId(),
+        kind: "folder",
+        language: state.targetLanguage,
+        title: folderName,
+        text: "",
+      }),
+      ...state.libraryTexts,
+    ];
+    persistLibraryTexts();
+    renderLibrary();
   });
   elements.editLibraryText.addEventListener("click", () => {
     const activeText = getActiveLibraryText();
@@ -3944,6 +4589,30 @@ if (!isBrowserRuntime()) {
     state.grammarView = "editor";
     state.draftGrammarSections = [createGrammarBlock("text")];
     render();
+  });
+  elements.grammarCreateFolder.addEventListener("click", () => {
+    if (!state.targetLanguage) {
+      return;
+    }
+
+    const folderName = promptForFolderName("grammar");
+    if (!folderName) {
+      return;
+    }
+
+    state.grammarPoints = [
+      hydrateGrammarPoint({
+        id: generateId(),
+        kind: "folder",
+        language: state.targetLanguage,
+        title: folderName,
+        summary: "",
+        blocks: [],
+      }),
+      ...state.grammarPoints,
+    ];
+    persistGrammarPoints();
+    renderGrammar();
   });
   elements.grammarSearchInput.addEventListener("input", (event) => {
     state.grammarSearch = event.target.value;

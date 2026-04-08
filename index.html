@@ -29,9 +29,6 @@
           <div class="language-switcher compact-language-switcher">
             <div class="language-switcher-header">
               <p class="panel-kicker">Target language</p>
-              <button class="secondary add-language-toggle" id="add-language-toggle" type="button">
-                Add language
-              </button>
             </div>
             <div class="language-tabs" id="language-tabs" aria-label="Target languages"></div>
             <form id="add-language-form" class="add-language-form">
@@ -62,7 +59,7 @@
               <p class="panel-kicker">Intro</p>
               <h2>Use Kapp by building one language at a time.</h2>
               <p class="intro-copy">
-                Pick a target language at the top, add your own content, then study from decks, grammar pages, and texts.
+                Kapp is a tool to help you along your language-learning journey, keep track of your progress, and centralize what you learn in one place. Pick a target language, then build your own decks, grammar pages, and reading texts around it.
               </p>
             </div>
 
@@ -238,6 +235,7 @@
               <div class="recording-actions">
                 <button class="secondary hidden" id="grammar-back-to-library" type="button">Back to library</button>
                 <button class="secondary hidden" id="grammar-edit-current" type="button">Edit page</button>
+                <button class="secondary" id="grammar-create-folder" type="button">New folder</button>
                 <button class="primary" id="grammar-create-new" type="button">New grammar point</button>
               </div>
             </div>
@@ -304,6 +302,7 @@
                 <button class="secondary hidden" id="library-back-to-list" type="button">Back to library</button>
                 <button class="secondary hidden" id="edit-library-text" type="button">Edit text</button>
                 <button class="ghost hidden" id="delete-library-text" type="button">Delete text</button>
+                <button class="secondary" id="library-create-folder" type="button">New folder</button>
                 <button class="primary" id="library-create-new" type="button">Import text</button>
               </div>
             </div>
@@ -521,10 +520,6 @@
                   <p class="panel-kicker">Statistics</p>
                   <h2>Language overview</h2>
                 </div>
-                <div class="mode-tabs">
-                  <button class="mode-tab is-active" type="button" data-stats-view="charts">Charts</button>
-                  <button class="mode-tab" type="button" data-stats-view="tables">Tables</button>
-                </div>
               </div>
               <div class="chart-grid" id="language-summary-stats"></div>
               <div class="bar-chart" id="language-chart"></div>
@@ -575,7 +570,10 @@
                   New deck name
                   <input id="create-deck-input" name="deckName" type="text" placeholder="Core phrases" required />
                 </label>
-                <button class="primary" type="submit">Create deck</button>
+                <div class="recording-actions">
+                  <button class="secondary" id="create-deck-folder" type="button">New folder</button>
+                  <button class="primary" type="submit">Create deck</button>
+                </div>
               </form>
               <div id="deck-summary" class="deck-summary"></div>
             </div>
