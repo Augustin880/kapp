@@ -309,6 +309,30 @@ function getHighlightedTerms(value) {
   return [...value.toString().matchAll(/\[\[(.+?)\]\]/g)].map((match) => match[1].trim()).filter(Boolean);
 }
 
+function getGrammarLinkMatches(value) {
+  return [...value.toString().matchAll(/\{\{(.+?)::(.+?)\}\}/g)].map((match) => {
+    const [raw, visibleText, referenceId] = match;
+    const start = match.index ?? 0;
+    return {
+      raw,
+      visibleText: visibleText.trim(),
+      referenceId: referenceId.trim(),
+      start,
+      end: start + raw.length,
+    };
+  });
+}
+
+function getGrammarLinkMatchAtCursor(value, cursorIndex) {
+  if (typeof cursorIndex !== "number") {
+    return null;
+  }
+
+  return (
+    getGrammarLinkMatches(value).find((match) => cursorIndex >= match.start && cursorIndex <= match.end) || null
+  );
+}
+
 function getMultipleChoiceAnswerText(value) {
   const highlightedTerms = getHighlightedTerms(value);
   if (highlightedTerms.length > 0) {
@@ -396,6 +420,8 @@ function hydrateCard(card) {
   return {
     ...card,
     audio: typeof card.audio === "string" ? card.audio : "",
+    sourceTextId: typeof card.sourceTextId === "string" ? card.sourceTextId : "",
+    sourceTextSnippet: typeof card.sourceTextSnippet === "string" ? card.sourceTextSnippet : "",
     score: typeof card.score === "number" ? card.score : 0,
     stats: {
       ...createEmptyStats(),
@@ -520,6 +546,9 @@ if (!isBrowserRuntime()) {
     editingLibraryTextId: "",
     selectedLibrarySnippet: "",
     libraryCaptureCollapsed: true,
+    libraryGrammarSelection: { start: 0, end: 0, text: "" },
+    activeLibraryGrammarToken: null,
+    activeLibraryStyleToken: null,
     grammarSearch: "",
     librarySearch: "",
     deckView: "library",
@@ -604,7 +633,18 @@ if (!isBrowserRuntime()) {
     libraryEditTagsInput: document.querySelector("#library-edit-tags-input"),
     libraryEditDifficultyInput: document.querySelector("#library-edit-difficulty-input"),
     libraryEditTextInput: document.querySelector("#library-edit-text-input"),
-    libraryGrammarSuggestions: document.querySelector("#library-grammar-suggestions"),
+    libraryVisualEditor: document.querySelector("#library-visual-editor"),
+    libraryLinkPopover: document.querySelector("#library-link-popover"),
+    libraryStylePopover: document.querySelector("#library-style-popover"),
+    libraryGrammarSelectionStatus: document.querySelector("#library-grammar-selection-status"),
+    libraryGrammarLinkSelect: document.querySelector("#library-grammar-link-select"),
+    applyLibraryGrammarLink: document.querySelector("#apply-library-grammar-link"),
+    libraryActiveGrammarLinkSelect: document.querySelector("#library-active-grammar-link-select"),
+    updateLibraryGrammarLink: document.querySelector("#update-library-grammar-link"),
+    removeLibraryGrammarLink: document.querySelector("#remove-library-grammar-link"),
+    libraryActiveStyleSelect: document.querySelector("#library-active-style-select"),
+    updateLibraryTextStyle: document.querySelector("#update-library-text-style"),
+    removeLibraryTextStyle: document.querySelector("#remove-library-text-style"),
     cancelEditLibraryText: document.querySelector("#cancel-edit-library-text"),
     libraryReadingProgress: document.querySelector("#library-reading-progress"),
     libraryReaderContent: document.querySelector("#library-reader-content"),
@@ -1301,6 +1341,9 @@ if (!isBrowserRuntime()) {
 
   function stopEditingLibraryText() {
     state.editingLibraryTextId = "";
+    state.libraryGrammarSelection = { start: 0, end: 0, text: "" };
+    state.activeLibraryGrammarToken = null;
+    state.activeLibraryStyleToken = null;
     elements.libraryEditForm.reset();
   }
 
@@ -1346,63 +1389,307 @@ if (!isBrowserRuntime()) {
     elements.libraryEditTagsInput.value = entry.tags.join(", ");
     elements.libraryEditDifficultyInput.value = entry.difficulty || "Intermediate";
     elements.libraryEditTextInput.value = entry.text;
-    renderLibraryGrammarSuggestions();
+    state.libraryGrammarSelection = { start: 0, end: 0, text: "" };
+    state.activeLibraryGrammarToken = null;
+    state.activeLibraryStyleToken = null;
+    renderLibraryGrammarLinkOptions();
+    renderLibraryVisualEditor();
+    renderLibraryGrammarSelectionState();
+    hideLibraryLinkPopover();
+    hideLibraryStylePopover();
   }
 
-  function applyLibraryGrammarSuggestion(referenceId) {
-    const field = elements.libraryEditTextInput;
-    const match = getPendingGrammarLinkMatch(field.value, field.selectionStart ?? 0);
-    if (!match) {
-      return;
-    }
-
-    field.value = `${field.value.slice(0, match.start)}{{${match.visibleText}::${referenceId}}}${field.value.slice(match.end)}`;
-    const nextPosition = match.start + `{{${match.visibleText}::${referenceId}}}`.length;
-    field.focus();
-    field.setSelectionRange(nextPosition, nextPosition);
-    renderLibraryGrammarSuggestions();
-  }
-
-  function renderLibraryGrammarSuggestions() {
-    const field = elements.libraryEditTextInput;
-    const suggestions = elements.libraryGrammarSuggestions;
-    if (!field || !suggestions || state.libraryView !== "editor") {
-      return;
-    }
-
-    const match = getPendingGrammarLinkMatch(field.value, field.selectionStart ?? 0);
-    if (!match) {
-      suggestions.innerHTML = "";
-      suggestions.classList.add("hidden");
-      return;
-    }
-
+  function renderLibraryGrammarLinkOptions() {
     const grammarPoints = getGrammarForTargetLanguage();
-    if (grammarPoints.length === 0) {
-      suggestions.innerHTML = `<p class="list-meta">No grammar points available for this language.</p>`;
-      suggestions.classList.remove("hidden");
+    const optionsHtml = [
+      `<option value="">Choose a grammar rule</option>`,
+      ...grammarPoints.map(
+        (point) => `<option value="${escapeHtml(point.referenceId)}">${escapeHtml(point.title)}</option>`,
+      ),
+    ].join("");
+    elements.libraryGrammarLinkSelect.innerHTML = optionsHtml;
+    elements.libraryActiveGrammarLinkSelect.innerHTML = optionsHtml;
+    elements.applyLibraryGrammarLink.disabled = grammarPoints.length === 0;
+  }
+
+  function renderLibraryVisualEditorText(value) {
+    const source = value.toString();
+    const pattern = /\(\((.+?)::(.+?)\)\)|\{\{(.+?)::(.+?)\}\}|\[\[(.+?)\]\]|\*\*(.+?)\*\*|__(.+?)__/g;
+    let lastIndex = 0;
+    let html = "";
+    const supportedColors = new Set(["red", "green", "blue", "gold", "orange", "mint", "rose"]);
+
+    for (const match of source.matchAll(pattern)) {
+      const [raw, colorName, colorText, grammarText, grammarId, highlighted, boldText, italicText] = match;
+      const start = match.index ?? 0;
+      html += escapeHtml(source.slice(lastIndex, start));
+      if (colorName) {
+        const normalizedColor = supportedColors.has(colorName.trim().toLowerCase())
+          ? colorName.trim().toLowerCase()
+          : "accent";
+        html += `<span data-annotation="color" data-color="${escapeHtml(normalizedColor)}" class="inline-color inline-color-${escapeHtml(
+          normalizedColor,
+        )}">${escapeHtml(colorText.trim())}</span>`;
+      } else if (boldText) {
+        html += `<strong data-annotation="bold" class="library-editor-style-token">${escapeHtml(boldText.trim())}</strong>`;
+      } else if (italicText) {
+        html += `<em data-annotation="italic" class="library-editor-style-token">${escapeHtml(italicText.trim())}</em>`;
+      } else if (highlighted) {
+        html += `<span data-annotation="highlight" class="inline-highlight">${escapeHtml(highlighted)}</span>`;
+      } else {
+        html += `<span data-annotation="grammar-link" data-grammar-reference="${escapeHtml(
+          grammarId.trim(),
+        )}" class="grammar-inline-link library-editor-grammar-link" contenteditable="false">${escapeHtml(
+          grammarText.trim(),
+        )}</span>`;
+      }
+      lastIndex = start + raw.length;
+    }
+
+    html += escapeHtml(source.slice(lastIndex));
+    return html.replaceAll("\n", "<br />");
+  }
+
+  function renderLibraryVisualEditor() {
+    const editor = elements.libraryVisualEditor;
+    if (!editor) {
       return;
     }
 
-    suggestions.innerHTML = `
-      <p class="panel-kicker">Choose grammar rule for "${escapeHtml(match.visibleText)}"</p>
-      <div class="grammar-inline-picker-list">
-        ${grammarPoints
-          .map(
-            (point) => `
-              <button class="secondary library-grammar-suggestion" type="button" data-grammar-reference="${escapeHtml(point.referenceId)}">
-                ${escapeHtml(point.title)}
-              </button>
-            `,
-          )
-          .join("")}
-      </div>
-    `;
-    suggestions.classList.remove("hidden");
+    editor.innerHTML = elements.libraryEditTextInput.value
+      ? renderLibraryVisualEditorText(elements.libraryEditTextInput.value)
+      : "";
+  }
 
-    [...suggestions.querySelectorAll(".library-grammar-suggestion")].forEach((button) => {
-      button.addEventListener("click", () => applyLibraryGrammarSuggestion(button.dataset.grammarReference || ""));
-    });
+  function serializeLibraryEditorNode(node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      return node.textContent || "";
+    }
+
+    if (node.nodeType !== Node.ELEMENT_NODE) {
+      return "";
+    }
+
+    const element = node;
+    if (element.tagName === "BR") {
+      return "\n";
+    }
+
+    const textContent = [...element.childNodes].map(serializeLibraryEditorNode).join("");
+    const annotation = element.dataset.annotation || "";
+    if (annotation === "grammar-link") {
+      return `{{${textContent}::${element.dataset.grammarReference || ""}}}`;
+    }
+    if (annotation === "highlight") {
+      return `[[${textContent}]]`;
+    }
+    if (annotation === "color") {
+      return `((${element.dataset.color || "green"}::${textContent}))`;
+    }
+    if (annotation === "bold" || element.tagName === "STRONG") {
+      return `**${textContent}**`;
+    }
+    if (annotation === "italic" || element.tagName === "EM") {
+      return `__${textContent}__`;
+    }
+    if (element.tagName === "DIV" || element.tagName === "P") {
+      return `${textContent}\n`;
+    }
+    return textContent;
+  }
+
+  function syncLibraryEditTextFromVisualEditor() {
+    const editor = elements.libraryVisualEditor;
+    if (!editor) {
+      return;
+    }
+
+    const serialized = [...editor.childNodes].map(serializeLibraryEditorNode).join("").replace(/\n{3,}/g, "\n\n");
+    elements.libraryEditTextInput.value = serialized.replace(/\n$/, "");
+  }
+
+  function getLibraryEditorSelection() {
+    const selection = window.getSelection();
+    const editor = elements.libraryVisualEditor;
+    if (!selection || selection.rangeCount === 0 || !editor) {
+      return null;
+    }
+
+    const range = selection.getRangeAt(0);
+    const anchorNode = selection.anchorNode;
+    const focusNode = selection.focusNode;
+    if (!anchorNode || !focusNode || !editor.contains(anchorNode) || !editor.contains(focusNode)) {
+      return null;
+    }
+
+    return { selection, range, text: selection.toString() };
+  }
+
+  function updateLibraryGrammarSelectionState() {
+    const editorSelection = getLibraryEditorSelection();
+    const selectedText = editorSelection?.text?.trim() || "";
+    state.libraryGrammarSelection = { start: 0, end: 0, text: selectedText };
+    renderLibraryGrammarSelectionState();
+  }
+
+  function renderLibraryGrammarSelectionState() {
+    const selectedText = state.libraryGrammarSelection.text.trim();
+    elements.libraryGrammarSelectionStatus.textContent = selectedText
+      ? `Selected text: "${selectedText}"`
+      : "Select text in the editor to link it to a grammar point.";
+    elements.applyLibraryGrammarLink.disabled = !selectedText || !elements.libraryGrammarLinkSelect.value;
+  }
+
+  function showLibraryLinkPopover(target) {
+    const popover = elements.libraryLinkPopover;
+    const wrap = popover.parentElement;
+    const targetRect = target.getBoundingClientRect();
+    const wrapRect = wrap.getBoundingClientRect();
+    popover.style.left = `${targetRect.left - wrapRect.left}px`;
+    popover.style.top = `${targetRect.bottom - wrapRect.top + 8}px`;
+    popover.classList.remove("hidden");
+  }
+
+  function hideLibraryLinkPopover() {
+    elements.libraryLinkPopover.classList.add("hidden");
+    elements.libraryLinkPopover.style.removeProperty("left");
+    elements.libraryLinkPopover.style.removeProperty("top");
+  }
+
+  function showLibraryStylePopover(target) {
+    const popover = elements.libraryStylePopover;
+    const wrap = popover.parentElement;
+    const targetRect = target.getBoundingClientRect();
+    const wrapRect = wrap.getBoundingClientRect();
+    popover.style.left = `${targetRect.left - wrapRect.left}px`;
+    popover.style.top = `${targetRect.bottom - wrapRect.top + 8}px`;
+    popover.classList.remove("hidden");
+  }
+
+  function hideLibraryStylePopover() {
+    elements.libraryStylePopover.classList.add("hidden");
+    elements.libraryStylePopover.style.removeProperty("left");
+    elements.libraryStylePopover.style.removeProperty("top");
+  }
+
+  function openLibraryGrammarPopover(target) {
+    state.activeLibraryGrammarToken = { element: target };
+    state.activeLibraryStyleToken = null;
+    elements.libraryActiveGrammarLinkSelect.value = target.dataset.grammarReference || "";
+    elements.updateLibraryGrammarLink.disabled = !elements.libraryActiveGrammarLinkSelect.value;
+    elements.removeLibraryGrammarLink.disabled = false;
+    hideLibraryStylePopover();
+    showLibraryLinkPopover(target);
+  }
+
+  function openLibraryStylePopover(target) {
+    state.activeLibraryStyleToken = { element: target };
+    state.activeLibraryGrammarToken = null;
+    elements.libraryActiveStyleSelect.value = target.dataset.annotation === "italic" ? "italic" : "bold";
+    hideLibraryLinkPopover();
+    showLibraryStylePopover(target);
+  }
+
+  function applyLibraryGrammarLinkFromSelection() {
+    const editorSelection = getLibraryEditorSelection();
+    const referenceId = elements.libraryGrammarLinkSelect.value;
+    const selectedText = editorSelection?.text?.trim() || "";
+    if (!editorSelection || !referenceId || !selectedText || editorSelection.range.collapsed) {
+      return;
+    }
+
+    const link = document.createElement("span");
+    link.dataset.annotation = "grammar-link";
+    link.dataset.grammarReference = referenceId;
+    link.className = "grammar-inline-link library-editor-grammar-link";
+    link.contentEditable = "false";
+    link.textContent = selectedText;
+
+    editorSelection.range.deleteContents();
+    editorSelection.range.insertNode(link);
+    const selection = window.getSelection();
+    const afterRange = document.createRange();
+    afterRange.setStartAfter(link);
+    afterRange.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(afterRange);
+
+    syncLibraryEditTextFromVisualEditor();
+    state.libraryGrammarSelection = { start: 0, end: 0, text: "" };
+    renderLibraryGrammarSelectionState();
+    openLibraryGrammarPopover(link);
+  }
+
+  function updateActiveLibraryGrammarLink() {
+    const link = state.activeLibraryGrammarToken?.element;
+    const nextReferenceId = elements.libraryActiveGrammarLinkSelect.value;
+    if (!link || !nextReferenceId) {
+      return;
+    }
+
+    link.dataset.grammarReference = nextReferenceId;
+    syncLibraryEditTextFromVisualEditor();
+    state.activeLibraryGrammarToken = null;
+    hideLibraryLinkPopover();
+  }
+
+  function removeActiveLibraryGrammarLink() {
+    const link = state.activeLibraryGrammarToken?.element;
+    if (!link) {
+      return;
+    }
+
+    link.replaceWith(document.createTextNode(link.textContent || ""));
+    state.activeLibraryGrammarToken = null;
+    syncLibraryEditTextFromVisualEditor();
+    hideLibraryLinkPopover();
+  }
+
+  function updateActiveLibraryTextStyle() {
+    const token = state.activeLibraryStyleToken?.element;
+    const nextStyle = elements.libraryActiveStyleSelect.value;
+    if (!token || !nextStyle) {
+      return;
+    }
+
+    const replacement = document.createElement(nextStyle === "italic" ? "em" : "strong");
+    replacement.dataset.annotation = nextStyle;
+    replacement.className = "library-editor-style-token";
+    replacement.textContent = token.textContent || "";
+    token.replaceWith(replacement);
+    state.activeLibraryStyleToken = null;
+    syncLibraryEditTextFromVisualEditor();
+    hideLibraryStylePopover();
+  }
+
+  function removeActiveLibraryTextStyle() {
+    const token = state.activeLibraryStyleToken?.element;
+    if (!token) {
+      return;
+    }
+
+    token.replaceWith(document.createTextNode(token.textContent || ""));
+    state.activeLibraryStyleToken = null;
+    syncLibraryEditTextFromVisualEditor();
+    hideLibraryStylePopover();
+  }
+
+  function handleLibraryVisualEditorInteraction(target) {
+    const link = target.closest(".library-editor-grammar-link");
+    if (link) {
+      openLibraryGrammarPopover(link);
+      return;
+    }
+
+    const styleToken = target.closest(".library-editor-style-token");
+    if (styleToken) {
+      openLibraryStylePopover(styleToken);
+    } else {
+      state.activeLibraryGrammarToken = null;
+      hideLibraryLinkPopover();
+      state.activeLibraryStyleToken = null;
+      hideLibraryStylePopover();
+    }
   }
 
   function renderCardFormState() {
@@ -1638,6 +1925,98 @@ if (!isBrowserRuntime()) {
           .join("")}
       </div>
     `;
+  }
+
+  function getLibraryLinkedCards(textId) {
+    if (!textId) {
+      return [];
+    }
+
+    return state.flashcards.filter(
+      (card) => card.language === state.targetLanguage && card.sourceTextId === textId && card.sourceTextSnippet.trim(),
+    );
+  }
+
+  function wrapSnippetMatches(container, snippet, cards) {
+    if (!snippet || !container) {
+      return;
+    }
+
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        if (!node.nodeValue?.trim()) {
+          return NodeFilter.FILTER_REJECT;
+        }
+        if (node.parentElement?.closest(".grammar-inline-link, .library-card-link")) {
+          return NodeFilter.FILTER_REJECT;
+        }
+        return NodeFilter.FILTER_ACCEPT;
+      },
+    });
+
+    const textNodes = [];
+    let currentNode = walker.nextNode();
+    while (currentNode) {
+      textNodes.push(currentNode);
+      currentNode = walker.nextNode();
+    }
+
+    for (const node of textNodes) {
+      const value = node.nodeValue || "";
+      const index = value.indexOf(snippet);
+      if (index === -1) {
+        continue;
+      }
+
+      const range = document.createRange();
+      range.setStart(node, index);
+      range.setEnd(node, index + snippet.length);
+      const wrapper = document.createElement("span");
+      wrapper.className = "library-card-link";
+      wrapper.tabIndex = 0;
+      wrapper.dataset.translation = cards.map((card) => stripAnnotationMarkup(card.answer)).join(" · ");
+      wrapper.dataset.deck = cards[0]?.deck || "";
+      range.surroundContents(wrapper);
+      break;
+    }
+  }
+
+  function attachLibraryCardLinks(container, textId) {
+    if (!container || !textId) {
+      return;
+    }
+
+    const linkedCards = getLibraryLinkedCards(textId);
+    const groupedCards = new Map();
+    linkedCards.forEach((card) => {
+      const key = stripAnnotationMarkup(card.sourceTextSnippet).trim();
+      if (!key) {
+        return;
+      }
+      if (!groupedCards.has(key)) {
+        groupedCards.set(key, []);
+      }
+      groupedCards.get(key).push(card);
+    });
+
+    [...groupedCards.entries()]
+      .sort((left, right) => right[0].length - left[0].length)
+      .forEach(([snippet, cards]) => {
+        wrapSnippetMatches(container, snippet, cards);
+      });
+
+    [...container.querySelectorAll(".library-card-link")].forEach((link) => {
+      const showTooltip = () => {
+        link.dataset.tooltipVisible = "true";
+      };
+      const hideTooltip = () => {
+        link.dataset.tooltipVisible = "false";
+      };
+      link.addEventListener("mouseenter", showTooltip);
+      link.addEventListener("focus", showTooltip);
+      link.addEventListener("mouseleave", hideTooltip);
+      link.addEventListener("blur", hideTooltip);
+    });
   }
 
   function createExportSelectionMarkup(items, inputName, emptyText) {
@@ -2301,6 +2680,11 @@ if (!isBrowserRuntime()) {
     if (!state.targetLanguage) {
       elements.libraryPanelTitle.textContent = "Text library";
       elements.librarySummaryStats.innerHTML = "";
+      elements.libraryGrammarLinkSelect.innerHTML = `<option value="">Choose a grammar rule</option>`;
+      elements.libraryActiveGrammarLinkSelect.innerHTML = `<option value="">Choose a grammar rule</option>`;
+      elements.applyLibraryGrammarLink.disabled = true;
+      elements.updateLibraryGrammarLink.disabled = true;
+      elements.removeLibraryGrammarLink.disabled = true;
       elements.librarySearchInput.value = "";
       elements.librarySearchInput.disabled = true;
       elements.libraryList.innerHTML = `<p class="list-meta">Select a target language to build a reading library.</p>`;
@@ -2399,6 +2783,8 @@ if (!isBrowserRuntime()) {
 
     if (state.libraryView === "editor" && editingText) {
       elements.libraryPanelTitle.textContent = `Edit ${editingText.title}`;
+      renderLibraryGrammarLinkOptions();
+      renderLibraryGrammarSelectionState();
       elements.libraryReaderMeta.innerHTML = "";
       elements.libraryReadingProgress.classList.add("hidden");
       elements.libraryReaderActions.classList.add("hidden");
@@ -2443,6 +2829,7 @@ if (!isBrowserRuntime()) {
       </div>
       <div class="library-text-body">${renderHighlightedMultilineText(currentChunk)}</div>
     `;
+    attachLibraryCardLinks(elements.libraryReaderContent.querySelector(".library-text-body"), activeText.id);
     elements.libraryReaderActions.classList.remove("hidden");
     elements.libraryPreviousChunk.disabled = safeChunkIndex === 0;
     elements.libraryNextChunk.textContent = safeChunkIndex >= chunks.length - 1 ? "Finish" : "Next";
@@ -3379,14 +3766,62 @@ if (!isBrowserRuntime()) {
     state.librarySearch = event.target.value;
     renderLibrary();
   });
-  elements.libraryEditTextInput.addEventListener("input", () => {
-    renderLibraryGrammarSuggestions();
+  elements.libraryVisualEditor.addEventListener("input", () => {
+    syncLibraryEditTextFromVisualEditor();
+    updateLibraryGrammarSelectionState();
   });
-  elements.libraryEditTextInput.addEventListener("click", () => {
-    renderLibraryGrammarSuggestions();
+  elements.libraryVisualEditor.addEventListener("click", (event) => {
+    handleLibraryVisualEditorInteraction(event.target);
+    updateLibraryGrammarSelectionState();
   });
-  elements.libraryEditTextInput.addEventListener("keyup", () => {
-    renderLibraryGrammarSuggestions();
+  elements.libraryVisualEditor.addEventListener("keyup", () => {
+    syncLibraryEditTextFromVisualEditor();
+    updateLibraryGrammarSelectionState();
+  });
+  elements.libraryVisualEditor.addEventListener("mouseup", () => {
+    updateLibraryGrammarSelectionState();
+  });
+  elements.libraryVisualEditor.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      document.execCommand("insertLineBreak");
+      syncLibraryEditTextFromVisualEditor();
+      updateLibraryGrammarSelectionState();
+    }
+  });
+  elements.libraryGrammarLinkSelect.addEventListener("change", () => {
+    renderLibraryGrammarSelectionState();
+  });
+  elements.applyLibraryGrammarLink.addEventListener("click", () => {
+    applyLibraryGrammarLinkFromSelection();
+  });
+  elements.libraryActiveGrammarLinkSelect.addEventListener("change", () => {
+    elements.updateLibraryGrammarLink.disabled = !elements.libraryActiveGrammarLinkSelect.value;
+  });
+  elements.updateLibraryGrammarLink.addEventListener("click", () => {
+    updateActiveLibraryGrammarLink();
+  });
+  elements.removeLibraryGrammarLink.addEventListener("click", () => {
+    removeActiveLibraryGrammarLink();
+  });
+  elements.updateLibraryTextStyle.addEventListener("click", () => {
+    updateActiveLibraryTextStyle();
+  });
+  elements.removeLibraryTextStyle.addEventListener("click", () => {
+    removeActiveLibraryTextStyle();
+  });
+  document.addEventListener("click", (event) => {
+    if (
+      state.libraryView === "editor" &&
+      !elements.libraryLinkPopover.contains(event.target) &&
+      !elements.libraryStylePopover.contains(event.target) &&
+      !elements.libraryVisualEditor.contains(event.target)
+    ) {
+      state.activeLibraryGrammarToken = null;
+      state.activeLibraryStyleToken = null;
+      hideLibraryLinkPopover();
+      hideLibraryStylePopover();
+    }
   });
   elements.libraryPreviousChunk.addEventListener("click", () => {
     const activeText = getActiveLibraryText();
@@ -3432,6 +3867,7 @@ if (!isBrowserRuntime()) {
       return;
     }
 
+    const activeText = getActiveLibraryText();
     const formData = new FormData(event.currentTarget);
     const newDeckName = formData.get("newDeckName").toString().trim();
     const selectedDeck = formData.get("deckName").toString().trim();
@@ -3453,6 +3889,8 @@ if (!isBrowserRuntime()) {
       answer,
       notes: formData.get("notes").toString().trim(),
       audio: "",
+      sourceTextId: activeText?.id || "",
+      sourceTextSnippet: prompt,
       score: 0,
       stats: createEmptyStats(),
     });
@@ -3619,6 +4057,7 @@ if (!isBrowserRuntime()) {
       return;
     }
 
+    syncLibraryEditTextFromVisualEditor();
     const formData = new FormData(event.currentTarget);
     const cleanedText = cleanImportedText(formData.get("text").toString());
     if (!cleanedText) {
@@ -3656,15 +4095,21 @@ if (!isBrowserRuntime()) {
 
     const formData = new FormData(event.currentTarget);
     const editingCard = getEditingCard();
+    const nextPrompt = formData.get("prompt").toString().trim();
+    const keepsSourceLink =
+      Boolean(editingCard?.sourceTextId) &&
+      normalizeText(editingCard?.prompt || "") === normalizeText(nextPrompt);
     const nextCard = hydrateCard({
       id: editingCard?.id || generateId(),
       language: state.targetLanguage,
       deck: editingCard?.deck || state.selectedSettingsDeck,
-      prompt: formData.get("prompt").toString().trim(),
+      prompt: nextPrompt,
       hint: formData.get("hint").toString().trim(),
       answer: formData.get("answer").toString().trim(),
       notes: formData.get("notes").toString().trim(),
       audio: state.importedAudio,
+      sourceTextId: keepsSourceLink ? editingCard.sourceTextId : "",
+      sourceTextSnippet: keepsSourceLink ? editingCard.sourceTextSnippet : "",
       score: editingCard?.score ?? 0,
       stats: editingCard?.stats ?? createEmptyStats(),
     });

@@ -425,12 +425,57 @@
                     <option value="Advanced">Advanced</option>
                   </select>
                 </label>
+                <div class="grammar-inline-picker">
+                  <div class="panel-header">
+                    <div>
+                      <p class="panel-kicker">Grammar links</p>
+                      <p class="recording-copy">Select text in the editor, choose a grammar rule, then insert the link automatically.</p>
+                    </div>
+                  </div>
+                  <p class="field-help" id="library-grammar-selection-status">Select text in the editor to link it to a grammar point.</p>
+                  <div class="grammar-link-builder">
+                    <label>
+                      Grammar rule
+                      <select id="library-grammar-link-select">
+                        <option value="">Choose a grammar rule</option>
+                      </select>
+                    </label>
+                    <button class="secondary" id="apply-library-grammar-link" type="button">Link selected text</button>
+                  </div>
+                </div>
                 <label>
                   Text
-                  <textarea id="library-edit-text-input" name="text" rows="22" placeholder="Write or paste the full text here." required></textarea>
+                  <textarea id="library-edit-text-input" name="text" rows="22" placeholder="Write or paste the full text here." required class="hidden"></textarea>
                 </label>
-                <div class="grammar-inline-picker hidden" id="library-grammar-suggestions"></div>
-                <p class="field-help">Supported markup: <code>[[highlight]]</code>, <code>{{grammar::id}}</code>, <code>((green::text))</code>, <code>**bold**</code>, <code>__italic__</code>.</p>
+                <div class="library-visual-editor-wrap">
+                  <div id="library-visual-editor" class="library-visual-editor" contenteditable="true" spellcheck="false" aria-label="Library text editor"></div>
+                  <div class="library-link-popover hidden" id="library-link-popover">
+                    <label>
+                      Grammar rule
+                      <select id="library-active-grammar-link-select">
+                        <option value="">Choose a grammar rule</option>
+                      </select>
+                    </label>
+                    <div class="recording-actions">
+                      <button class="secondary" id="update-library-grammar-link" type="button">Change</button>
+                      <button class="ghost" id="remove-library-grammar-link" type="button">Remove</button>
+                    </div>
+                  </div>
+                  <div class="library-link-popover hidden" id="library-style-popover">
+                    <label>
+                      Text style
+                      <select id="library-active-style-select">
+                        <option value="bold">Bold</option>
+                        <option value="italic">Italic</option>
+                      </select>
+                    </label>
+                    <div class="recording-actions">
+                      <button class="secondary" id="update-library-text-style" type="button">Change</button>
+                      <button class="ghost" id="remove-library-text-style" type="button">Remove</button>
+                    </div>
+                  </div>
+                </div>
+                <p class="field-help">Supported markup: <code>[[highlight]]</code>, <code>((green::text))</code>, <code>**bold**</code>, <code>__italic__</code>. Grammar links are edited visually here.</p>
                 <div class="recording-actions">
                   <button class="primary" id="save-library-edit-button" type="submit">Save changes</button>
                   <button class="secondary" id="cancel-edit-library-text" type="button">Cancel edit</button>

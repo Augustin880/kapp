@@ -859,6 +859,9 @@ body[data-theme="night"] .grammar-list-item,
 body[data-theme="night"] .grammar-section-editor-card,
 body[data-theme="night"] .library-list-item,
 body[data-theme="night"] .library-reader-content,
+body[data-theme="night"] .library-visual-editor,
+body[data-theme="night"] .library-link-popover,
+body[data-theme="night"] .library-card-link::after,
 body[data-theme="night"] .intro-highlight,
 body[data-theme="night"] .intro-card,
 body[data-theme="night"] .intro-step,
@@ -1094,6 +1097,47 @@ body[data-theme="night"] .ghost {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.library-visual-editor-wrap {
+  position: relative;
+}
+
+.library-visual-editor {
+  min-height: 320px;
+  padding: 18px;
+  border-radius: 18px;
+  background: rgba(255, 250, 244, 0.9);
+  border: 1px solid var(--line);
+  font-size: 1.08rem;
+  line-height: 1.95;
+  white-space: pre-wrap;
+}
+
+.library-visual-editor:focus {
+  outline: 2px solid rgba(182, 88, 17, 0.35);
+  outline-offset: 2px;
+}
+
+.library-visual-editor .library-editor-grammar-link {
+  border-bottom: 1px solid rgba(29, 122, 76, 0.18);
+}
+
+.library-visual-editor .library-editor-style-token {
+  cursor: pointer;
+}
+
+.library-link-popover {
+  position: absolute;
+  z-index: 10;
+  width: min(320px, calc(100vw - 56px));
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(255, 250, 244, 0.98);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
 }
 
 .stats-table {
@@ -1384,6 +1428,45 @@ body[data-theme="night"] .ghost {
   font-size: 1.18rem;
   line-height: 2.02;
   white-space: normal;
+}
+
+.library-card-link {
+  position: relative;
+  padding: 0.04em 0.14em;
+  border-radius: 0.24em;
+  background: rgba(31, 26, 21, 0.08);
+  border-bottom: 1px dotted rgba(182, 88, 17, 0.48);
+  cursor: help;
+}
+
+.library-card-link::after {
+  content: attr(data-translation);
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  z-index: 4;
+  min-width: 180px;
+  max-width: min(320px, 70vw);
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 250, 244, 0.98);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font-size: 0.92rem;
+  line-height: 1.5;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(4px);
+  transition: opacity 0.14s ease, transform 0.14s ease;
+  white-space: normal;
+}
+
+.library-card-link:hover::after,
+.library-card-link:focus::after,
+.library-card-link[data-tooltip-visible="true"]::after {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .library-capture-panel {
