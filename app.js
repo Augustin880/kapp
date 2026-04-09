@@ -552,14 +552,36 @@ if (!isBrowserRuntime()) {
   console.error("app.js is a browser entrypoint. Start the local server with: node server.js");
 } else {
   if ("serviceWorker" in navigator) {
-    window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./sw.js").catch(() => {});
+    window.addEventListener("load", async () => {
+      const hadController = !!navigator.serviceWorker.controller;
+      let refreshing = false;
+
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        if (!hadController || refreshing) return;
+        refreshing = true;
+        window.location.reload();
+      });
+
+      try {
+        const registration = await navigator.serviceWorker.register("./sw.js");
+        await registration.update();
+
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState === "visible") {
+            registration.update().catch(() => {});
+          }
+        });
+      } catch (error) {
+        console.error("Service worker registration failed:", error);
+      }
     });
   }
 
+  const initial_settings = loadSettings();
+
   const state = {
-    activeTab: "intro",
-    settings: loadSettings(),
+    activeTab: initial_settings.targetLanguage ? "flashcards" : "intro",
+    settings: initial_settings,
     flashcards: loadFlashcards(),
     libraryTexts: loadLibraryTexts(),
     activeDeck: ALL_DECKS,
@@ -4312,7 +4334,7 @@ if (!isBrowserRuntime()) {
 
   elements.restartSession.addEventListener("click", () => {
     resetSession();
-    state.flashcardsView = "session";
+    state.flashcardsView = "settings";
     render();
   });
 
