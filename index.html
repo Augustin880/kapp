@@ -128,27 +128,23 @@
 
         <section class="tab-panel" data-panel="flashcards">
           <section class="study-stage panel">
-            <div class="study-topbar">
-              <div>
-                <p class="panel-kicker">Flashcards</p>
-                <h2>Focused Study Session</h2>
+            <div class="flashcards-settings-view" id="flashcards-settings-view">
+              <div class="study-topbar">
+                <div>
+                  <p class="panel-kicker">Flashcards</p>
+                  <h2>Study Setup</h2>
+                </div>
+                <div class="study-toolbar">
+                  <label>
+                    Deck
+                    <select id="deck-filter"></select>
+                  </label>
+                  <label>
+                    Goal
+                    <input id="session-goal" type="number" min="1" step="1" value="10" placeholder="10" />
+                  </label>
+                </div>
               </div>
-              <div class="study-toolbar">
-                <label>
-                  Deck
-                  <select id="deck-filter"></select>
-                </label>
-                <label>
-                  Goal
-                  <input id="session-goal" type="number" min="1" step="1" value="10" placeholder="10" />
-                </label>
-                <button class="secondary" id="restart-session" type="button">Restart session</button>
-              </div>
-            </div>
-
-            <div class="study-progress" id="study-progress"></div>
-
-            <div class="study-session-content" id="study-session-content">
               <div class="study-mode-header">
                 <p class="panel-kicker">Study method</p>
               </div>
@@ -157,70 +153,99 @@
                 <button class="mode-tab" type="button" data-study-mode="multiple-choice">Multiple choice</button>
                 <button class="mode-tab" type="button" data-study-mode="typing">Typing</button>
               </div>
-
-              <div class="study-focus">
-                <button class="flashcard immersive-card" id="flashcard" type="button" aria-live="polite">
-                  <span class="card-face card-front">
-                    <span class="card-label">Prompt</span>
-                    <span class="card-text" id="card-front-text"></span>
-                    <span class="card-subtext" id="card-front-meta"></span>
-                  </span>
-                  <span class="card-face card-back">
-                    <span class="card-label">Answer</span>
-                    <span class="card-text" id="card-back-text"></span>
-                    <span class="card-subtext" id="card-back-meta"></span>
-                  </span>
-                </button>
-
-                <div class="study-practice hidden" id="study-practice">
-                  <div class="practice-card immersive-practice-card">
-                    <p class="panel-kicker" id="study-prompt-label">Prompt</p>
-                    <h2 id="practice-prompt"></h2>
-                    <p class="list-meta" id="practice-meta"></p>
-                  </div>
-
-                  <div id="multiple-choice-panel" class="practice-mode is-active">
-                    <div id="multiple-choice-options" class="option-grid"></div>
-                  </div>
-
-                  <form id="typing-form" class="practice-mode typing-form">
-                    <div class="typing-cloze hidden" id="typing-cloze"></div>
-                    <label id="typing-answer-label">
-                      Type the answer
-                      <input id="typing-answer-input" name="typingAnswer" type="text" placeholder="Type your answer" />
-                      <span class="typing-inline-status hidden" id="typing-inline-status"></span>
-                    </label>
-                    <div class="typing-actions">
-                      <button class="primary" type="submit">Check answer</button>
-                      <button class="secondary" id="accept-typing-answer" type="button" disabled>
-                        My answer was correct
-                      </button>
-                    </div>
-                  </form>
-
-                  <div class="practice-feedback" id="practice-feedback"></div>
-                </div>
-              </div>
-
-              <div class="study-actions immersive-actions">
-                <button class="secondary" id="flip-card" type="button">Flip card</button>
-                <button class="secondary" id="next-card" type="button">Skip</button>
-                <button class="secondary" id="play-audio" type="button">Play audio</button>
-              </div>
-
-              <div class="confidence-actions immersive-confidence">
-                <button class="confidence hard" id="mark-hard" type="button">Needs work</button>
-                <button class="confidence medium" id="mark-medium" type="button">Almost there</button>
-                <button class="confidence easy" id="mark-easy" type="button">Know it</button>
+              <div class="study-progress study-setup-summary" id="study-progress"></div>
+              <div class="study-setup-actions">
+                <button class="primary" id="start-review" type="button">Start review</button>
               </div>
             </div>
 
-            <div class="session-end hidden" id="session-end-screen">
-              <p class="panel-kicker">Session Complete</p>
-              <h2 id="session-end-title"></h2>
-              <div class="chart-grid" id="session-end-stats"></div>
-              <div class="mini-list" id="session-end-summary"></div>
-              <button class="primary" id="start-next-session" type="button">Start another session</button>
+            <div class="flashcards-session-view hidden" id="flashcards-session-view">
+              <div class="study-session-header">
+                <div>
+                  <p class="panel-kicker">In Review</p>
+                  <h2 id="study-session-title">Focused Study Session</h2>
+                </div>
+                <div class="study-session-header-actions">
+                  <button class="secondary" id="restart-session" type="button">Restart session</button>
+                </div>
+              </div>
+              <div class="study-session-progress-panel">
+                <div class="study-progress-bar" aria-hidden="true">
+                  <div class="study-progress-bar-fill" id="study-progress-bar-fill"></div>
+                </div>
+                <div class="study-progress-meta">
+                  <span id="study-progress-label">0/0 reviewed</span>
+                  <span id="study-progress-subtext">0% session accuracy</span>
+                </div>
+              </div>
+
+              <div class="study-session-content" id="study-session-content">
+                <div class="study-mode-badge" id="study-mode-badge"></div>
+
+                <div class="study-focus">
+                  <button class="flashcard immersive-card" id="flashcard" type="button" aria-live="polite">
+                    <span class="card-face card-front">
+                      <span class="card-label">Prompt</span>
+                      <span class="card-text" id="card-front-text"></span>
+                      <span class="card-subtext" id="card-front-meta"></span>
+                    </span>
+                    <span class="card-face card-back">
+                      <span class="card-label">Answer</span>
+                      <span class="card-text" id="card-back-text"></span>
+                      <span class="card-subtext" id="card-back-meta"></span>
+                    </span>
+                  </button>
+
+                  <div class="study-practice hidden" id="study-practice">
+                    <div class="practice-card immersive-practice-card">
+                      <p class="panel-kicker" id="study-prompt-label">Prompt</p>
+                      <h2 id="practice-prompt"></h2>
+                      <p class="list-meta" id="practice-meta"></p>
+                    </div>
+
+                    <div id="multiple-choice-panel" class="practice-mode is-active">
+                      <div id="multiple-choice-options" class="option-grid"></div>
+                    </div>
+
+                    <form id="typing-form" class="practice-mode typing-form">
+                      <div class="typing-cloze hidden" id="typing-cloze"></div>
+                      <label id="typing-answer-label">
+                        Type the answer
+                        <input id="typing-answer-input" name="typingAnswer" type="text" placeholder="Type your answer" />
+                        <span class="typing-inline-status hidden" id="typing-inline-status"></span>
+                      </label>
+                      <div class="typing-actions">
+                        <button class="primary" type="submit">Check answer</button>
+                        <button class="secondary" id="accept-typing-answer" type="button" disabled>
+                          My answer was correct
+                        </button>
+                      </div>
+                    </form>
+
+                    <div class="practice-feedback" id="practice-feedback"></div>
+                  </div>
+                </div>
+
+                <div class="study-actions immersive-actions">
+                  <button class="secondary" id="flip-card" type="button">Flip card</button>
+                  <button class="secondary" id="next-card" type="button">Skip</button>
+                  <button class="secondary" id="play-audio" type="button">Play audio</button>
+                </div>
+
+                <div class="confidence-actions immersive-confidence">
+                  <button class="confidence hard" id="mark-hard" type="button">Needs work</button>
+                  <button class="confidence medium" id="mark-medium" type="button">Almost there</button>
+                  <button class="confidence easy" id="mark-easy" type="button">Know it</button>
+                </div>
+              </div>
+
+              <div class="session-end hidden" id="session-end-screen">
+                <p class="panel-kicker">Session Complete</p>
+                <h2 id="session-end-title"></h2>
+                <div class="chart-grid" id="session-end-stats"></div>
+                <div class="mini-list" id="session-end-summary"></div>
+                <button class="primary" id="start-next-session" type="button">Finish review</button>
+              </div>
             </div>
           </section>
         </section>
@@ -558,6 +583,8 @@
               </div>
               <div class="recording-actions">
                 <button class="secondary hidden" id="decks-back-to-library" type="button">Back to decks</button>
+                <button class="secondary hidden" id="decks-back-to-page" type="button">Back to deck</button>
+                <button class="primary" id="decks-create-new" type="button">Create deck</button>
               </div>
             </div>
 
@@ -565,17 +592,27 @@
               <div class="panel-header">
                 <p class="list-meta" id="deck-count">0 decks</p>
               </div>
+              <div class="recording-actions">
+                <button class="secondary" id="create-deck-folder" type="button">New folder</button>
+              </div>
+              <div id="deck-summary" class="deck-summary"></div>
+            </div>
+
+            <div class="deck-create-view hidden" id="deck-create-view">
+              <div class="panel-header">
+                <div>
+                  <p class="panel-kicker">Deck Creator</p>
+                  <h2>Create a new deck</h2>
+                </div>
+              </div>
+              <p class="field-help">Choose a clear deck name for the cards you want to group together.</p>
               <form id="create-deck-form" class="settings-form">
                 <label>
-                  New deck name
+                  Deck name
                   <input id="create-deck-input" name="deckName" type="text" placeholder="Core phrases" required />
                 </label>
-                <div class="recording-actions">
-                  <button class="secondary" id="create-deck-folder" type="button">New folder</button>
-                  <button class="primary" type="submit">Create deck</button>
-                </div>
+                <button class="primary" type="submit">Create deck</button>
               </form>
-              <div id="deck-summary" class="deck-summary"></div>
             </div>
 
             <div class="deck-page-view hidden" id="deck-page-view">
@@ -584,17 +621,11 @@
                   <h2 id="settings-deck-title">Deck workspace</h2>
                 </div>
                 <div class="recording-actions">
+                  <button class="primary" id="create-card-in-deck" type="button">New card</button>
                   <button class="ghost hidden" id="delete-selected-deck" type="button">Delete deck</button>
                 </div>
               </div>
               <p class="field-help" id="selected-deck-meta">Select a deck to manage its cards.</p>
-              <form id="rename-selected-deck-form" class="settings-form hidden">
-                <label>
-                  Rename deck
-                  <input id="rename-selected-deck-input" name="nextDeck" type="text" placeholder="Core phrases" required />
-                </label>
-                <button class="primary" type="submit">Save deck name</button>
-              </form>
               <div class="panel-header">
                 <div>
                   <p class="panel-kicker">Cards</p>
@@ -603,6 +634,16 @@
                 <p class="list-meta" id="card-count">0 cards</p>
               </div>
               <ul id="flashcard-list"></ul>
+            </div>
+
+            <div class="deck-editor-view hidden" id="deck-editor-view">
+              <div class="panel-header">
+                <div>
+                  <p class="panel-kicker">Card Editor</p>
+                  <h2 id="deck-card-editor-title">New card</h2>
+                </div>
+              </div>
+              <p class="field-help" id="deck-card-editor-copy">Create a clear, readable card for this deck.</p>
               <form id="flashcard-form" class="flashcard-form">
                 <p class="field-help hidden" id="editing-card-note">Editing an existing card. Save to update it.</p>
                 <p class="field-help" id="card-form-deck-label">Choose a deck before adding cards.</p>
@@ -765,11 +806,12 @@
           </section>
         </section>
       </main>
+      <button class="back-to-tabs-button" id="back-to-tabs-button" type="button" aria-label="Back to tabs">↑</button>
     </div>
 
     <template id="flashcard-list-item-template">
       <li class="flashcard-list-item">
-        <div>
+        <div class="flashcard-list-copy">
           <p class="list-title"></p>
           <p class="list-meta"></p>
         </div>

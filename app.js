@@ -589,6 +589,7 @@ if (!isBrowserRuntime()) {
     collapsedTreeFolders: {},
     grammarSearch: "",
     librarySearch: "",
+    flashcardsView: "settings",
     deckView: "library",
     grammarView: "library",
     libraryView: "list",
@@ -707,8 +708,16 @@ if (!isBrowserRuntime()) {
     deckFilter: document.querySelector("#deck-filter"),
     sessionGoal: document.querySelector("#session-goal"),
     restartSession: document.querySelector("#restart-session"),
+    startReview: document.querySelector("#start-review"),
     studyProgress: document.querySelector("#study-progress"),
+    flashcardsSettingsView: document.querySelector("#flashcards-settings-view"),
+    flashcardsSessionView: document.querySelector("#flashcards-session-view"),
     studySessionContent: document.querySelector("#study-session-content"),
+    studyProgressBarFill: document.querySelector("#study-progress-bar-fill"),
+    studyProgressLabel: document.querySelector("#study-progress-label"),
+    studyProgressSubtext: document.querySelector("#study-progress-subtext"),
+    studySessionTitle: document.querySelector("#study-session-title"),
+    studyModeBadge: document.querySelector("#study-mode-badge"),
     studyModeTabs: [...document.querySelectorAll(".mode-tab[data-study-mode]")],
     studyPractice: document.querySelector("#study-practice"),
     form: document.querySelector("#flashcard-form"),
@@ -758,8 +767,15 @@ if (!isBrowserRuntime()) {
     decksBackToLibrary: document.querySelector("#decks-back-to-library"),
     deckLibraryView: document.querySelector("#deck-library-view"),
     deckPageView: document.querySelector("#deck-page-view"),
+    deckCreateView: document.querySelector("#deck-create-view"),
+    deckEditorView: document.querySelector("#deck-editor-view"),
     deckSummary: document.querySelector("#deck-summary"),
     deckCount: document.querySelector("#deck-count"),
+    decksBackToPage: document.querySelector("#decks-back-to-page"),
+    decksCreateNew: document.querySelector("#decks-create-new"),
+    createCardInDeck: document.querySelector("#create-card-in-deck"),
+    deckCardEditorTitle: document.querySelector("#deck-card-editor-title"),
+    deckCardEditorCopy: document.querySelector("#deck-card-editor-copy"),
     dataTransferStatus: document.querySelector("#data-transfer-status"),
     exportAppDataForm: document.querySelector("#export-app-data-form"),
     exportLanguageSelect: document.querySelector("#export-language-select"),
@@ -781,10 +797,9 @@ if (!isBrowserRuntime()) {
     clearLocalData: document.querySelector("#clear-local-data"),
     createDeckForm: document.querySelector("#create-deck-form"),
     createDeckFolder: document.querySelector("#create-deck-folder"),
+    backToTabsButton: document.querySelector("#back-to-tabs-button"),
     settingsDeckTitle: document.querySelector("#settings-deck-title"),
     selectedDeckMeta: document.querySelector("#selected-deck-meta"),
-    renameSelectedDeckForm: document.querySelector("#rename-selected-deck-form"),
-    renameSelectedDeckInput: document.querySelector("#rename-selected-deck-input"),
     deleteSelectedDeck: document.querySelector("#delete-selected-deck"),
     cardFormDeckLabel: document.querySelector("#card-form-deck-label"),
   };
@@ -1367,6 +1382,7 @@ if (!isBrowserRuntime()) {
     state.sessionCorrect = 0;
     state.sessionComplete = false;
     state.sessionCompletionReason = "";
+    state.flashcardsView = "settings";
   }
 
   function maybeCompleteSession() {
@@ -1904,6 +1920,14 @@ if (!isBrowserRuntime()) {
     elements.saveCardButton.textContent = isEditing ? "Save changes" : "Save card";
     elements.cancelEditCard.classList.toggle("hidden", !isEditing);
     elements.editingCardNote.classList.toggle("hidden", !isEditing);
+    if (elements.deckCardEditorTitle) {
+      elements.deckCardEditorTitle.textContent = isEditing ? "Edit card" : "New card";
+    }
+    if (elements.deckCardEditorCopy) {
+      elements.deckCardEditorCopy.textContent = isEditing
+        ? "Update this card, then return to the deck list."
+        : "Create a new card for this deck, then return to the deck list.";
+    }
     elements.cardFormDeckLabel.textContent = state.selectedSettingsDeck
       ? "Add or edit cards in this deck."
       : "Choose a deck before adding cards.";
@@ -2434,15 +2458,32 @@ if (!isBrowserRuntime()) {
 
   function renderStudyProgress() {
     const visibleCards = getVisibleFlashcards();
+    if ((!state.targetLanguage || visibleCards.length === 0) && state.flashcardsView === "session") {
+      state.flashcardsView = "settings";
+    }
+
     const reviewed = state.sessionReviewedIds.length;
     const target = getSessionTargetCount();
     const accuracy = Math.round((state.sessionCorrect / Math.max(1, state.sessionAttempts)) * 100);
+    const progressPercent = Math.round((reviewed / Math.max(1, target)) * 100);
+
+    elements.flashcardsSettingsView.classList.toggle("hidden", state.flashcardsView !== "settings");
+    elements.flashcardsSessionView.classList.toggle("hidden", state.flashcardsView === "settings");
+    elements.studyProgressBarFill.style.width = `${Math.max(0, Math.min(100, progressPercent))}%`;
+    elements.studyProgressLabel.textContent = `${reviewed}/${target} reviewed`;
+    elements.studyProgressSubtext.textContent = `${accuracy}% session accuracy`;
+    elements.studySessionTitle.textContent = state.sessionComplete ? "Review complete" : "Focused Study Session";
+    elements.studyModeBadge.textContent = {
+      flashcards: "Mode: Flashcards",
+      "multiple-choice": "Mode: Multiple choice",
+      typing: "Mode: Typing",
+    }[state.studyMode];
 
     elements.studyProgress.innerHTML = [
-      createMetricCard(`${reviewed}/${target}`, "Session progress"),
       createMetricCard(`${visibleCards.length}`, "Cards in current deck scope"),
-      createMetricCard(`${accuracy}%`, "Session accuracy"),
+      createMetricCard(`${Math.min(state.sessionGoal, Math.max(1, visibleCards.length || state.sessionGoal))}`, "Goal this session"),
     ].join("");
+    elements.startReview.disabled = !state.targetLanguage || visibleCards.length === 0;
   }
 
   function renderFlashcard() {
@@ -2581,7 +2622,7 @@ if (!isBrowserRuntime()) {
           (card.audio ? " · audio" : "");
         item.querySelector(".edit-card").addEventListener("click", () => {
           state.selectedSettingsDeck = card.deck;
-          state.deckView = "page";
+          state.deckView = "editor";
           startEditingCard(card.id);
           render();
         });
@@ -2676,6 +2717,11 @@ if (!isBrowserRuntime()) {
     const isFlashcards = state.studyMode === "flashcards";
     const isMultipleChoice = state.studyMode === "multiple-choice";
     const isTyping = state.studyMode === "typing";
+    const showNextAfterWrong =
+      !isFlashcards &&
+      state.studyAnsweredCardId === currentCard?.id &&
+      ((isMultipleChoice && !state.submittedMultipleChoiceCorrect) ||
+        (isTyping && !state.submittedTypingCorrect));
 
     renderStudyModeTabs();
     elements.card.classList.toggle("hidden", !isFlashcards);
@@ -2683,6 +2729,8 @@ if (!isBrowserRuntime()) {
     elements.multipleChoicePanel.classList.toggle("is-active", isMultipleChoice);
     elements.typingForm.classList.toggle("is-active", isTyping);
     elements.flipCard.classList.toggle("hidden", !isFlashcards);
+    elements.nextCard.classList.toggle("hidden", !isFlashcards && !showNextAfterWrong);
+    elements.playAudio.classList.toggle("hidden", !isFlashcards);
     elements.markHard.parentElement.classList.toggle("hidden", !isFlashcards);
     elements.flipCard.disabled = !isFlashcards || state.sessionComplete || state.isAdvancing;
     elements.nextCard.disabled = state.sessionComplete || state.isAdvancing;
@@ -2767,6 +2815,9 @@ if (!isBrowserRuntime()) {
             ? "Correct."
             : `Incorrect. Correct answer: ${stripAnnotationMarkup(studyContent.answer)}`;
           render();
+          if (isCorrect && !state.sessionComplete) {
+            schedulePracticeAutoAdvance();
+          }
         });
       });
     } else {
@@ -3607,16 +3658,21 @@ if (!isBrowserRuntime()) {
       ? `${decks.length} decks${folderCount ? ` · ${folderCount} folders` : ""}`
       : "0 decks";
     elements.deckLibraryView.classList.toggle("hidden", state.deckView !== "library");
+    elements.deckCreateView.classList.toggle("hidden", state.deckView !== "create");
     elements.deckPageView.classList.toggle("hidden", state.deckView !== "page");
-    elements.decksBackToLibrary.classList.toggle("hidden", state.deckView === "library");
+    elements.deckEditorView.classList.toggle("hidden", state.deckView !== "editor");
+    elements.decksBackToLibrary.classList.toggle("hidden", !["create", "page"].includes(state.deckView));
+    elements.decksBackToPage.classList.toggle("hidden", state.deckView !== "editor");
+    elements.decksCreateNew.classList.toggle("hidden", state.deckView !== "library");
 
     if (!state.targetLanguage) {
       elements.decksPanelTitle.textContent = "";
       elements.deckSummary.innerHTML = `<p class="list-meta">Select a target language to manage its decks.</p>`;
       elements.settingsDeckTitle.textContent = "Deck workspace";
       elements.selectedDeckMeta.textContent = "Select a deck to manage its cards.";
-      elements.renameSelectedDeckForm.classList.add("hidden");
       elements.deleteSelectedDeck.classList.add("hidden");
+      elements.createCardInDeck.classList.add("hidden");
+      elements.decksCreateNew.classList.remove("hidden");
       return;
     }
 
@@ -3625,8 +3681,8 @@ if (!isBrowserRuntime()) {
       elements.deckSummary.innerHTML = `<p class="list-meta">No decks exist yet for ${state.targetLanguage}. Add cards below to create one.</p>`;
       elements.settingsDeckTitle.textContent = "Deck workspace";
       elements.selectedDeckMeta.textContent = "Create a deck to start adding cards.";
-      elements.renameSelectedDeckForm.classList.add("hidden");
       elements.deleteSelectedDeck.classList.add("hidden");
+      elements.createCardInDeck.classList.add("hidden");
       return;
     }
 
@@ -3714,9 +3770,8 @@ if (!isBrowserRuntime()) {
     elements.selectedDeckMeta.textContent = state.selectedSettingsDeck
       ? `${getCardsForSettingsDeck().length} cards in this deck.`
       : "Select a deck to manage its cards.";
-    elements.renameSelectedDeckForm.classList.toggle("hidden", !state.selectedSettingsDeck);
     elements.deleteSelectedDeck.classList.toggle("hidden", !state.selectedSettingsDeck);
-    elements.renameSelectedDeckInput.value = state.selectedSettingsDeck || "";
+    elements.createCardInDeck.classList.toggle("hidden", !state.selectedSettingsDeck);
   }
 
   function attachGrammarLinkNavigation(element) {
@@ -3808,6 +3863,17 @@ if (!isBrowserRuntime()) {
     state.currentIndex = nextIndex;
     state.flipped = false;
     render();
+  }
+
+  function schedulePracticeAutoAdvance() {
+    cancelPendingAdvance();
+    state.isAdvancing = true;
+    renderStudyMode();
+    state.advanceTimeoutId = window.setTimeout(() => {
+      state.advanceTimeoutId = 0;
+      state.isAdvancing = false;
+      advanceStudyCard();
+    }, 420);
   }
 
   function updateFlashcardScore(nextScore, isCorrect) {
@@ -4195,6 +4261,10 @@ if (!isBrowserRuntime()) {
     });
   });
 
+  elements.backToTabsButton.addEventListener("click", () => {
+    document.querySelector(".feature-tabs")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
   [
     elements.card,
     elements.practicePrompt,
@@ -4230,8 +4300,19 @@ if (!isBrowserRuntime()) {
     render();
   });
 
+  elements.startReview.addEventListener("click", () => {
+    if (!state.targetLanguage || getVisibleFlashcards().length === 0) {
+      return;
+    }
+
+    resetSession();
+    state.flashcardsView = "session";
+    render();
+  });
+
   elements.restartSession.addEventListener("click", () => {
     resetSession();
+    state.flashcardsView = "session";
     render();
   });
 
@@ -4275,6 +4356,9 @@ if (!isBrowserRuntime()) {
     state.typingAnswerPendingCardId = isCorrect ? "" : currentCard.id;
     event.currentTarget.reset();
     render();
+    if (isCorrect && !state.sessionComplete) {
+      schedulePracticeAutoAdvance();
+    }
   });
 
   elements.acceptTypingAnswer.addEventListener("click", () => {
@@ -4295,6 +4379,9 @@ if (!isBrowserRuntime()) {
     state.studyFeedback = "Accepted as correct.";
     state.typingAnswerPendingCardId = "";
     render();
+    if (!state.sessionComplete) {
+      schedulePracticeAutoAdvance();
+    }
   });
 
   elements.audioFileInput.addEventListener("change", async (event) => {
@@ -4312,7 +4399,8 @@ if (!isBrowserRuntime()) {
   elements.clearRecording.addEventListener("click", clearImportedAudio);
   elements.cancelEditCard.addEventListener("click", () => {
     stopEditingCard();
-    renderCardFormState();
+    state.deckView = "page";
+    render();
   });
   elements.cancelEditGrammar.addEventListener("click", () => {
     stopEditingGrammarPoint();
@@ -4339,6 +4427,24 @@ if (!isBrowserRuntime()) {
     event.currentTarget.reset();
     render();
   });
+  elements.decksCreateNew.addEventListener("click", () => {
+    if (!state.targetLanguage) {
+      return;
+    }
+
+    elements.createDeckForm.reset();
+    state.deckView = "create";
+    render();
+  });
+  elements.createCardInDeck.addEventListener("click", () => {
+    if (!state.selectedSettingsDeck) {
+      return;
+    }
+
+    stopEditingCard();
+    state.deckView = "editor";
+    render();
+  });
   elements.createDeckFolder.addEventListener("click", () => {
     if (!state.targetLanguage) {
       return;
@@ -4356,6 +4462,11 @@ if (!isBrowserRuntime()) {
   elements.decksBackToLibrary.addEventListener("click", () => {
     stopEditingCard();
     state.deckView = "library";
+    render();
+  });
+  elements.decksBackToPage.addEventListener("click", () => {
+    stopEditingCard();
+    state.deckView = "page";
     render();
   });
   elements.libraryBackToList.addEventListener("click", () => {
@@ -4556,20 +4667,6 @@ if (!isBrowserRuntime()) {
     }
 
     deleteLibraryText(activeText.id);
-  });
-  elements.renameSelectedDeckForm.addEventListener("submit", (event) => {
-    event.preventDefault();
-    if (!state.selectedSettingsDeck) {
-      return;
-    }
-
-    const nextDeck = new FormData(event.currentTarget).get("nextDeck").toString().trim();
-    if (!nextDeck) {
-      return;
-    }
-
-    renameDeck(state.selectedSettingsDeck, nextDeck);
-    render();
   });
   elements.deleteSelectedDeck.addEventListener("click", () => {
     if (!state.selectedSettingsDeck) {
@@ -4796,6 +4893,7 @@ if (!isBrowserRuntime()) {
     persistFlashcards();
     persistSettings();
     stopEditingCard();
+    state.deckView = "page";
     render();
   });
 
