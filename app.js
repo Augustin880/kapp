@@ -553,11 +553,10 @@ if (!isBrowserRuntime()) {
 } else {
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", async () => {
-      const hadController = !!navigator.serviceWorker.controller;
       let refreshing = false;
 
       navigator.serviceWorker.addEventListener("controllerchange", () => {
-        if (!hadController || refreshing) return;
+        if (refreshing) return;
         refreshing = true;
         window.location.reload();
       });
