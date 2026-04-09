@@ -735,8 +735,6 @@ if (!isBrowserRuntime()) {
     flashcardsSessionView: document.querySelector("#flashcards-session-view"),
     studySessionContent: document.querySelector("#study-session-content"),
     studyProgressBarFill: document.querySelector("#study-progress-bar-fill"),
-    studyProgressLabel: document.querySelector("#study-progress-label"),
-    studyProgressSubtext: document.querySelector("#study-progress-subtext"),
     studySessionTitle: document.querySelector("#study-session-title"),
     studyModeBadge: document.querySelector("#study-mode-badge"),
     studyModeTabs: [...document.querySelectorAll(".mode-tab[data-study-mode]")],
@@ -2491,8 +2489,6 @@ if (!isBrowserRuntime()) {
     elements.flashcardsSettingsView.classList.toggle("hidden", state.flashcardsView !== "settings");
     elements.flashcardsSessionView.classList.toggle("hidden", state.flashcardsView === "settings");
     elements.studyProgressBarFill.style.width = `${Math.max(0, Math.min(100, progressPercent))}%`;
-    elements.studyProgressLabel.textContent = `${reviewed}/${target} reviewed`;
-    elements.studyProgressSubtext.textContent = `${accuracy}% session accuracy`;
     elements.studySessionTitle.textContent = state.sessionComplete ? "Review complete" : "Focused Study Session";
     elements.studyModeBadge.textContent = {
       flashcards: "Mode: Flashcards",
