@@ -530,6 +530,17 @@ h2 {
   grid-template-rows: minmax(120px, auto) minmax(220px, 1fr) 72px;
 }
 
+.study-practice.is-typing-mode {
+  grid-template-rows: clamp(132px, 24vh, 180px) minmax(0, 1fr) auto;
+}
+
+.study-practice.is-typing-mode .practice-card {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
 .immersive-card {
   width: min(920px, 100%);
   min-height: 0;
@@ -586,14 +597,38 @@ h2 {
   justify-content: flex-start;
 }
 
+.study-setup-mascot {
+  display: none;
+}
+
 @media (min-width: 921px) {
   .flashcards-settings-view {
     grid-template-columns: minmax(0, 1fr) 320px;
     grid-template-areas:
       "top top"
-      "mode summary"
+      "mascot summary"
+      "mode actions"
       "tabs actions";
     align-items: start;
+  }
+
+  .study-setup-mascot {
+    grid-area: mascot;
+    display: grid;
+    justify-items: center;
+    align-items: center;
+    min-height: 180px;
+    padding: 4px 0 0;
+    background: transparent;
+    padding-right: 30%;
+  }
+
+  .study-setup-mascot img {
+    width: min(360px, 100%);
+    max-height: 260px;
+    object-fit: contain;
+    background: transparent;
+    filter: drop-shadow(0 16px 28px rgba(76, 49, 10, 0.12));
   }
 
   .flashcards-settings-view .study-topbar {
@@ -871,14 +906,18 @@ button:focus-visible {
 
 .card-text {
   font-family: "Space Grotesk", sans-serif;
-  font-size: clamp(2.2rem, 5vw, 4rem);
-  line-height: 0.98;
+  font-size: clamp(1.55rem, 3.7vw, 3.2rem);
+  line-height: 1.02;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
 }
 
 #practice-prompt {
   font-family: "Space Grotesk", sans-serif;
-  font-size: clamp(1.8rem, 3.8vw, 3rem);
-  line-height: 1.04;
+  font-size: clamp(1.2rem, 2.9vw, 2.2rem);
+  line-height: 1.08;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
 }
 
 .inline-highlight {
@@ -1017,6 +1056,14 @@ button:disabled {
   min-height: 0;
 }
 
+.study-practice.is-typing-mode .typing-form.is-active {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 10px;
+  min-height: 0;
+}
+
 .recording-panel,
 .practice-card,
 .practice-feedback {
@@ -1141,6 +1188,13 @@ body[data-theme="night"] .ghost {
   min-height: 70px;
 }
 
+.study-practice.is-typing-mode .typing-cloze {
+  flex: 0 0 auto;
+  min-height: 70px;
+  max-height: 100%;
+  overflow: auto;
+}
+
 .typing-cloze-text {
   display: inline;
   white-space: pre-wrap;
@@ -1150,27 +1204,41 @@ body[data-theme="night"] .ghost {
 }
 
 .typing-blank-input {
-  width: min(18ch, calc(100% - 8px));
+  width: fit-content;
+  width: min(calc(var(--typing-box-ch, 8) * 0.7ch + 1.6rem), calc(100% - 8px));
+  max-width: 100%;
   min-width: 6ch;
   display: inline-block;
   vertical-align: baseline;
-  padding: 8px 10px;
+  box-sizing: border-box;
+  padding: 5px 8px;
   margin: 0 4px;
-  border-radius: 12px;
+  border-radius: 10px;
   border: 1px solid rgba(182, 88, 17, 0.28);
   background: rgba(255, 255, 255, 0.9);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
 }
 
 .typing-answer-chip {
   display: inline-flex;
   align-items: center;
+  width: fit-content;
+  width: min(calc(var(--typing-box-ch, 8) * 0.7ch + 2.2rem), 100%);
+  max-width: 100%;
   gap: 8px;
   min-width: 6ch;
-  padding: 8px 10px;
+  box-sizing: border-box;
+  padding: 5px 8px;
   margin: 0 4px;
-  border-radius: 12px;
+  border-radius: 10px;
   border: 1px solid var(--line);
   font-weight: 600;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  line-height: 1.2;
 }
 
 .typing-answer-chip.is-correct {
@@ -1224,6 +1292,34 @@ body[data-theme="night"] .ghost {
 .typing-inline-status.is-incorrect {
   background: rgba(169, 68, 56, 0.14);
   color: var(--rose);
+}
+
+.study-practice.is-typing-mode #typing-answer-label {
+  min-height: 0;
+  justify-items: start;
+  flex: 0 0 auto;
+  align-content: start;
+}
+
+.study-practice.is-typing-mode #typing-answer-input {
+  width: fit-content;
+  width: min(calc(var(--typing-input-ch, 12) * 0.72ch + 1.8rem), 100%);
+  min-width: 6ch;
+  max-width: 100%;
+  justify-self: start;
+  padding: 6px 8px;
+  min-height: 0;
+  line-height: 1.2;
+  border-radius: 10px;
+}
+
+.study-practice.is-typing-mode .typing-actions {
+  margin-top: auto;
+}
+
+.study-practice.is-typing-mode #practice-prompt,
+.study-practice.is-typing-mode #practice-meta {
+  overflow: hidden;
 }
 
 .recording-status {
@@ -2048,9 +2144,9 @@ body[data-theme="night"] .ghost {
   }
 
   .card-text {
-    font-size: clamp(1.45rem, 7vw, 2.1rem);
-    line-height: 1.06;
-    overflow: auto;
+    font-size: clamp(1rem, 4.9vw, 1.55rem);
+    line-height: 1.1;
+    overflow: hidden;
   }
 
   .card-subtext {
@@ -2058,8 +2154,8 @@ body[data-theme="night"] .ghost {
   }
 
   #practice-prompt {
-    font-size: clamp(1.2rem, 5.8vw, 1.75rem);
-    line-height: 1.1;
+    font-size: clamp(0.95rem, 4.25vw, 1.3rem);
+    line-height: 1.14;
   }
 
   .practice-card,
@@ -2074,6 +2170,16 @@ body[data-theme="night"] .ghost {
     gap: 10px;
     grid-template-rows: minmax(96px, auto) minmax(0, 1fr) 64px;
     min-height: 0;
+  }
+
+  .study-practice.is-typing-mode {
+    grid-template-rows: minmax(96px, auto) minmax(0, 1fr) auto;
+  }
+
+  .study-practice.is-typing-mode .practice-card {
+    height: auto;
+    overflow: visible;
+    grid-template-rows: auto auto auto;
   }
 
   .practice-mode.is-active,
@@ -2097,18 +2203,69 @@ body[data-theme="night"] .ghost {
   }
 
   .typing-form {
+    gap: 4px;
+    grid-template-rows: auto auto auto;
+    align-content: start;
+  }
+
+  .study-practice.is-typing-mode .typing-form.is-active {
     gap: 8px;
-    grid-template-rows: minmax(70px, auto) minmax(52px, auto) 46px;
   }
 
   .typing-cloze {
     line-height: 2;
   }
 
+  #typing-answer-label {
+    gap: 6px;
+  }
+
+  .study-practice.is-typing-mode #typing-answer-label {
+    flex: 0 0 auto;
+    align-content: start;
+  }
+
   .typing-blank-input {
+    width: min(12ch, calc(100% - 4px));
     min-width: 4.5ch;
-    padding: 6px 8px;
+    padding: 4px 7px;
     margin: 0 2px;
+    line-height: 1.15;
+  }
+
+  .typing-answer-chip {
+    max-width: calc(100% - 4px);
+    gap: 6px;
+    padding: 4px 7px;
+    margin: 0 2px;
+    font-size: 0.9rem;
+    line-height: 1.15;
+  }
+
+  .study-practice.is-typing-mode #typing-answer-input {
+    padding: 4px 7px;
+    font-size: 0.94rem;
+    line-height: 1.15;
+    border-radius: 9px;
+  }
+
+  .typing-actions {
+    gap: 4px;
+    align-items: flex-start;
+    align-content: flex-start;
+  }
+
+  .typing-actions button {
+    min-height: 40px;
+    padding: 8px 10px;
+    font-size: 0.82rem;
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .practice-feedback {
+    min-height: 52px;
+    padding: 8px 10px;
   }
 
   .deck-table-row,

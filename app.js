@@ -2705,15 +2705,17 @@ if (!isBrowserRuntime()) {
       .map((part, index) => {
         if (part.type === "blank") {
           const blankIndex = parts.slice(0, index + 1).filter((entry) => entry.type === "blank").length - 1;
+          const blankLength = Math.max(4, Math.min(24, stripAnnotationMarkup(part.value || "").trim().length || 6));
           if (isSubmitted) {
             const submittedValue = state.submittedTypingAnswers[blankIndex] || "";
             const marker = state.submittedTypingCorrect ? "v" : "x";
-            return `<span class="typing-answer-chip ${state.submittedTypingCorrect ? "is-correct" : "is-incorrect"}">${escapeHtml(
+            const answerLength = Math.max(4, Math.min(24, submittedValue.trim().length || blankLength));
+            return `<span class="typing-answer-chip ${state.submittedTypingCorrect ? "is-correct" : "is-incorrect"}" style="--typing-box-ch: ${answerLength};">${escapeHtml(
               submittedValue || " ",
             )}<span class="typing-answer-mark">${marker}</span></span>`;
           }
 
-          return `<input class="typing-blank-input" type="text" data-blank-index="${blankIndex}" placeholder="" aria-label="Missing word" />`;
+          return `<input class="typing-blank-input" type="text" data-blank-index="${blankIndex}" style="--typing-box-ch: ${blankLength};" placeholder="" aria-label="Missing word" />`;
         }
 
         if (part.type === "grammar-link") {
@@ -2727,6 +2729,12 @@ if (!isBrowserRuntime()) {
       .join("");
     elements.typingCloze.classList.remove("hidden");
     elements.typingAnswerLabel.classList.add("hidden");
+  }
+
+  function updateTypingInputWidth(value = "") {
+    const basis = (value || elements.typingAnswerInput.placeholder || "").trim();
+    const widthCh = Math.max(6, Math.min(28, basis.length || 12));
+    elements.typingAnswerInput.style.setProperty("--typing-input-ch", String(widthCh));
   }
 
   function renderStudyMode() {
@@ -2743,6 +2751,8 @@ if (!isBrowserRuntime()) {
     renderStudyModeTabs();
     elements.card.classList.toggle("hidden", !isFlashcards);
     elements.studyPractice.classList.toggle("hidden", isFlashcards);
+    elements.studyPractice.classList.toggle("is-typing-mode", isTyping);
+    elements.studyPractice.classList.toggle("is-multiple-choice-mode", isMultipleChoice);
     elements.multipleChoicePanel.classList.toggle("is-active", isMultipleChoice);
     elements.typingForm.classList.toggle("is-active", isTyping);
     elements.flipCard.classList.toggle("hidden", !isFlashcards);
@@ -2860,6 +2870,7 @@ if (!isBrowserRuntime()) {
           elements.typingInlineStatus.textContent = "";
           elements.typingInlineStatus.className = "typing-inline-status hidden";
         }
+        updateTypingInputWidth(elements.typingAnswerInput.value);
       }
       elements.typingAnswerInput.disabled = answered || state.isAdvancing || state.sessionComplete;
       [...elements.typingCloze.querySelectorAll(".typing-blank-input")].forEach((input) => {
@@ -2877,6 +2888,7 @@ if (!isBrowserRuntime()) {
       elements.typingInlineStatus.textContent = "";
       elements.typingInlineStatus.className = "typing-inline-status hidden";
       elements.typingAnswerInput.disabled = false;
+      updateTypingInputWidth("");
       elements.typingForm.querySelector('button[type="submit"]').disabled = false;
       elements.typingForm.querySelector('button[type="submit"]').classList.remove("hidden");
       elements.acceptTypingAnswer.disabled = true;
@@ -4380,6 +4392,10 @@ if (!isBrowserRuntime()) {
     if (isCorrect && !state.sessionComplete) {
       schedulePracticeAutoAdvance();
     }
+  });
+
+  elements.typingAnswerInput.addEventListener("input", (event) => {
+    updateTypingInputWidth(event.target.value);
   });
 
   elements.acceptTypingAnswer.addEventListener("click", () => {
