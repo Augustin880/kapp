@@ -2866,7 +2866,9 @@ if (!isBrowserRuntime()) {
         input.disabled = answered || state.isAdvancing || state.sessionComplete;
       });
       submitButton.disabled = answered || state.isAdvancing || state.sessionComplete;
+      submitButton.classList.toggle("hidden", answered);
       elements.acceptTypingAnswer.disabled = !canOverride || state.isAdvancing;
+      elements.acceptTypingAnswer.classList.toggle("hidden", !answered);
     } else {
       elements.typingCloze.innerHTML = "";
       elements.typingCloze.classList.add("hidden");
@@ -2876,7 +2878,9 @@ if (!isBrowserRuntime()) {
       elements.typingInlineStatus.className = "typing-inline-status hidden";
       elements.typingAnswerInput.disabled = false;
       elements.typingForm.querySelector('button[type="submit"]').disabled = false;
+      elements.typingForm.querySelector('button[type="submit"]').classList.remove("hidden");
       elements.acceptTypingAnswer.disabled = true;
+      elements.acceptTypingAnswer.classList.add("hidden");
     }
   }
 

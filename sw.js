@@ -1,4 +1,4 @@
-const CACHE_NAME = "kapp-v6";
+const CACHE_NAME = "kapp-v7";
 const STATIC_ASSETS = [
   "./",
   "./manifest.webmanifest",
