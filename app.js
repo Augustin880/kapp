@@ -644,7 +644,10 @@ if (!isBrowserRuntime()) {
     featureTabs: [...document.querySelectorAll(".feature-tab")],
     tabPanels: [...document.querySelectorAll(".tab-panel")],
     grammarPanelTitle: document.querySelector("#grammar-panel-title"),
+    grammarShell: document.querySelector(".grammar-shell"),
     libraryPanelTitle: document.querySelector("#library-panel-title"),
+    libraryShell: document.querySelector(".library-shell"),
+    libraryReaderTitle: document.querySelector("#library-reader-title"),
     libraryBrowserView: document.querySelector("#library-browser-view"),
     libraryPageView: document.querySelector("#library-page-view"),
     libraryImportView: document.querySelector("#library-import-view"),
@@ -671,7 +674,6 @@ if (!isBrowserRuntime()) {
     grammarSectionsEditor: document.querySelector("#grammar-sections-editor"),
     grammarSectionTemplate: document.querySelector("#grammar-section-editor-template"),
     libraryCount: document.querySelector("#library-count"),
-    librarySummaryStats: document.querySelector("#library-summary-stats"),
     librarySearchInput: document.querySelector("#library-search-input"),
     libraryImportForm: document.querySelector("#library-import-form"),
     libraryTitleInput: document.querySelector("#library-title-input"),
@@ -682,7 +684,6 @@ if (!isBrowserRuntime()) {
     libraryImportStatus: document.querySelector("#library-import-status"),
     saveLibraryTextButton: document.querySelector("#save-library-text-button"),
     libraryList: document.querySelector("#library-list"),
-    libraryReaderMeta: document.querySelector("#library-reader-meta"),
     libraryBackToList: document.querySelector("#library-back-to-list"),
     libraryCreateNew: document.querySelector("#library-create-new"),
     libraryCreateFolder: document.querySelector("#library-create-folder"),
@@ -706,7 +707,6 @@ if (!isBrowserRuntime()) {
     updateLibraryTextStyle: document.querySelector("#update-library-text-style"),
     removeLibraryTextStyle: document.querySelector("#remove-library-text-style"),
     cancelEditLibraryText: document.querySelector("#cancel-edit-library-text"),
-    libraryReadingProgress: document.querySelector("#library-reading-progress"),
     libraryReaderContent: document.querySelector("#library-reader-content"),
     libraryCapturePanel: document.querySelector(".library-capture-panel"),
     toggleLibraryCapture: document.querySelector("#toggle-library-capture"),
@@ -763,6 +763,7 @@ if (!isBrowserRuntime()) {
     recordingPreview: document.querySelector("#recording-preview"),
     sessionEndScreen: document.querySelector("#session-end-screen"),
     sessionEndTitle: document.querySelector("#session-end-title"),
+    sessionEndMascotImage: document.querySelector("#session-end-mascot-image"),
     sessionEndStats: document.querySelector("#session-end-stats"),
     sessionEndSummary: document.querySelector("#session-end-summary"),
     startNextSession: document.querySelector("#start-next-session"),
@@ -2589,6 +2590,7 @@ if (!isBrowserRuntime()) {
       state.sessionCompletionReason === "deck"
         ? "You reached the end of this deck."
         : "You reached your session goal.";
+    elements.sessionEndMascotImage.src = accuracy > 50 ? "img/celebrating.png" : "img/confused.png";
     elements.sessionEndStats.innerHTML = [
       createMetricCard(state.sessionReviewedIds.length, "Cards reviewed"),
       createMetricCard(`${accuracy}%`, "Session accuracy"),
@@ -3176,6 +3178,7 @@ if (!isBrowserRuntime()) {
         )
       : entries;
     const activeText = getActiveLibraryText();
+    elements.libraryShell.classList.toggle("is-reading-view", state.libraryView === "reader" && Boolean(activeText));
     const editingText = getEditingLibraryText();
     const unreadCount = texts.filter((entry) => entry.status === "unread").length;
     const readingCount = texts.filter((entry) => entry.status === "reading").length;
@@ -3199,7 +3202,6 @@ if (!isBrowserRuntime()) {
 
     if (!state.targetLanguage) {
       elements.libraryPanelTitle.textContent = "Text library";
-      elements.librarySummaryStats.innerHTML = "";
       elements.libraryGrammarLinkSelect.innerHTML = `<option value="">Choose a grammar rule</option>`;
       elements.libraryActiveGrammarLinkSelect.innerHTML = `<option value="">Choose a grammar rule</option>`;
       elements.applyLibraryGrammarLink.disabled = true;
@@ -3208,12 +3210,10 @@ if (!isBrowserRuntime()) {
       elements.librarySearchInput.value = "";
       elements.librarySearchInput.disabled = true;
       elements.libraryList.innerHTML = `<p class="list-meta">Select a target language to build a reading library.</p>`;
-      elements.libraryReaderMeta.innerHTML = "";
       elements.libraryReaderContent.innerHTML = `<p class="list-meta">Import or select a text to start reading.</p>`;
       elements.libraryDeckSelect.innerHTML = `<option value="">No decks available</option>`;
       elements.libraryCardForm.reset();
       elements.librarySnippetInput.disabled = true;
-      elements.libraryReadingProgress.classList.add("hidden");
       elements.libraryReaderActions.classList.add("hidden");
       elements.libraryImportView.classList.add("hidden");
       elements.libraryEditorView.classList.add("hidden");
@@ -3235,13 +3235,6 @@ if (!isBrowserRuntime()) {
     elements.librarySelectionStatus.textContent = state.selectedLibrarySnippet
       ? "Selection captured. You can adjust it before saving."
       : "Select a word or sentence in the text, then use it here.";
-
-    elements.librarySummaryStats.innerHTML = [
-      createMetricCard(texts.length, "Texts"),
-      createMetricCard(folderCount, "Folders"),
-      createMetricCard(readingCount, "Currently reading"),
-      createMetricCard(finishedCount, "Finished"),
-    ].join("");
 
     const renderLibraryTree = (parentId = "", depth = 0) =>
       getTreeChildren(filteredEntries, parentId)
@@ -3333,9 +3326,7 @@ if (!isBrowserRuntime()) {
 
     if (!activeText) {
       elements.libraryPanelTitle.textContent = "Text library";
-      elements.libraryReaderMeta.innerHTML = `<p class="list-meta">No imported texts yet.</p>`;
       elements.libraryReaderContent.innerHTML = `<p class="list-meta">Import a text to start reading.</p>`;
-      elements.libraryReadingProgress.classList.add("hidden");
       elements.libraryReaderActions.classList.add("hidden");
       elements.deleteLibraryText.classList.add("hidden");
       elements.editLibraryText.classList.add("hidden");
@@ -3344,8 +3335,6 @@ if (!isBrowserRuntime()) {
 
     if (state.libraryView === "import") {
       elements.libraryPanelTitle.textContent = "Import text";
-      elements.libraryReaderMeta.innerHTML = "";
-      elements.libraryReadingProgress.classList.add("hidden");
       elements.libraryReaderActions.classList.add("hidden");
       elements.deleteLibraryText.classList.add("hidden");
       elements.editLibraryText.classList.add("hidden");
@@ -3356,8 +3345,6 @@ if (!isBrowserRuntime()) {
       elements.libraryPanelTitle.textContent = `Edit ${editingText.title}`;
       renderLibraryGrammarLinkOptions();
       renderLibraryGrammarSelectionState();
-      elements.libraryReaderMeta.innerHTML = "";
-      elements.libraryReadingProgress.classList.add("hidden");
       elements.libraryReaderActions.classList.add("hidden");
       elements.deleteLibraryText.classList.remove("hidden");
       elements.editLibraryText.classList.add("hidden");
@@ -3372,9 +3359,7 @@ if (!isBrowserRuntime()) {
 
     if (state.libraryView !== "reader") {
       elements.libraryPanelTitle.textContent = "Text library";
-      elements.libraryReaderMeta.innerHTML = "";
       elements.libraryReaderContent.innerHTML = `<p class="list-meta">Select a text from the list to start reading it.</p>`;
-      elements.libraryReadingProgress.classList.add("hidden");
       elements.libraryReaderActions.classList.add("hidden");
       elements.deleteLibraryText.classList.add("hidden");
       elements.editLibraryText.classList.add("hidden");
@@ -3382,17 +3367,7 @@ if (!isBrowserRuntime()) {
     }
 
     elements.libraryPanelTitle.textContent = activeText.title;
-    elements.libraryReaderMeta.innerHTML = [
-      createMetricCard(activeText.wordCount, "Words"),
-      createMetricCard(activeText.characterCount, "Characters"),
-      createMetricCard(activeText.difficulty, "Difficulty"),
-    ].join("");
-    elements.libraryReadingProgress.innerHTML = [
-      createMetricCard(`${safeChunkIndex + 1}/${Math.max(1, chunks.length)}`, "Reading section"),
-      createMetricCard(`${progressPercent}%`, "Progress"),
-      createMetricCard(activeText.status, "Status"),
-    ].join("");
-    elements.libraryReadingProgress.classList.remove("hidden");
+    elements.libraryReaderTitle.textContent = activeText.title;
     elements.libraryReaderContent.innerHTML = `
       <div class="library-reader-header">
         <p class="list-meta">${escapeHtml(activeText.sourceName || "Imported text")} · ${escapeHtml(activeText.detectedLanguage || activeText.language)}</p>
@@ -3459,6 +3434,7 @@ if (!isBrowserRuntime()) {
     elements.grammarLibraryView.classList.toggle("hidden", state.grammarView !== "library");
     elements.grammarPageView.classList.toggle("hidden", state.grammarView !== "page");
     elements.grammarEditorView.classList.toggle("hidden", state.grammarView !== "editor");
+    elements.grammarShell.classList.toggle("is-page-view", state.grammarView === "page" && Boolean(activePoint));
     elements.grammarBackToLibrary.classList.toggle("hidden", state.grammarView === "library");
     elements.grammarEditCurrent.classList.toggle(
       "hidden",

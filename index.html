@@ -17,7 +17,7 @@
       href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=9" />
+    <link rel="stylesheet" href="./styles.css?v=10" />
   </head>
   <body>
     <div class="page-shell">
@@ -245,8 +245,15 @@
 
               <div class="session-end hidden" id="session-end-screen">
                 <p class="panel-kicker">Session Complete</p>
-                <h2 id="session-end-title"></h2>
-                <div class="chart-grid" id="session-end-stats"></div>
+                <div class="session-end-top">
+                  <div class="session-end-copy">
+                    <h2 id="session-end-title"></h2>
+                    <div class="session-end-mascot" aria-hidden="true">
+                      <img id="session-end-mascot-image" src="img/celebrating.png" alt="" />
+                    </div>
+                  </div>
+                  <div class="chart-grid" id="session-end-stats"></div>
+                </div>
                 <div class="mini-list" id="session-end-summary"></div>
                 <button class="primary" id="start-next-session" type="button">Finish review</button>
               </div>
@@ -330,10 +337,8 @@
                 <p class="panel-kicker">Library</p>
                 <h2 id="library-panel-title">Text library</h2>
               </div>
-              <div class="recording-actions">
+              <div class="recording-actions library-header-actions">
                 <button class="secondary hidden" id="library-back-to-list" type="button">Back to library</button>
-                <button class="secondary hidden" id="edit-library-text" type="button">Edit text</button>
-                <button class="ghost hidden" id="delete-library-text" type="button">Delete text</button>
                 <button class="secondary" id="library-create-folder" type="button">New folder</button>
                 <button class="primary" id="library-create-new" type="button">Import text</button>
               </div>
@@ -346,7 +351,6 @@
               <div class="panel-header">
                 <p class="list-meta" id="library-count">0 texts</p>
               </div>
-              <div class="chart-grid" id="library-summary-stats"></div>
               <label class="list-search">
                 Search texts
                 <input id="library-search-input" type="search" placeholder="Search title, tags, or text" />
@@ -355,8 +359,16 @@
             </div>
 
             <div class="library-page-view hidden" id="library-page-view">
-              <div class="library-reader-meta" id="library-reader-meta"></div>
-              <div class="library-reading-progress hidden" id="library-reading-progress"></div>
+              <div class="panel-header library-reader-title-row">
+                <div>
+                  <p class="panel-kicker">Reading</p>
+                  <h2 id="library-reader-title">Text</h2>
+                </div>
+                <div class="recording-actions">
+                  <button class="secondary hidden" id="edit-library-text" type="button">Edit text</button>
+                  <button class="ghost hidden" id="delete-library-text" type="button">Delete text</button>
+                </div>
+              </div>
               <section class="panel library-capture-panel">
                 <div class="panel-header">
                   <div>
@@ -839,6 +851,6 @@
       </li>
     </template>
 
-    <script type="module" src="./app.js?v=9"></script>
+    <script type="module" src="./app.js?v=10"></script>
   </body>
 </html>
