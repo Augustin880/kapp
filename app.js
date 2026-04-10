@@ -2459,7 +2459,7 @@ if (!isBrowserRuntime()) {
     if (!decks.includes(state.activeDeck)) {
       state.activeDeck = ALL_DECKS;
     }
-    if (!decks.includes(state.selectedSettingsDeck)) {
+    if (state.selectedSettingsDeck && !decks.includes(state.selectedSettingsDeck)) {
       state.selectedSettingsDeck = "";
       state.deckView = "library";
     }

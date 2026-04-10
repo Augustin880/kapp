@@ -1,4 +1,4 @@
-const CACHE_NAME = "fotialepou-v10";
+const CACHE_NAME = "fotialepou-v11";
 const STATIC_ASSETS = [
   "./",
   "./manifest.webmanifest",
