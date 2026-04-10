@@ -4269,14 +4269,14 @@ if (!isBrowserRuntime()) {
       elements.dataTransferStatus.textContent = "Data imported successfully.";
       render();
     } catch {
-      elements.dataTransferStatus.textContent = "Import failed. Please use a valid Kapp JSON export.";
+      elements.dataTransferStatus.textContent = "Import failed. Please use a valid Fotialepou JSON export.";
     } finally {
       elements.importAppDataButton.disabled = false;
     }
   });
 
   elements.clearLocalData.addEventListener("click", () => {
-    if (!window.confirm("Clear all local Kapp data on this device? This cannot be undone.")) {
+    if (!window.confirm("Clear all local Fotialepou data on this device? This cannot be undone.")) {
       return;
     }
 

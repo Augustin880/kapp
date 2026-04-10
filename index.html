@@ -3,27 +3,27 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Kapp | Language Learning Workspace</title>
+    <title>Fotialepou | Language Learning Workspace</title>
     <meta name="theme-color" content="#efe4cf" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="Kapp" />
+    <meta name="apple-mobile-web-app-title" content="Fotialepou" />
     <link rel="manifest" href="./manifest.webmanifest" />
-    <link rel="icon" href="./icon.svg" type="image/svg+xml" />
-    <link rel="apple-touch-icon" href="./icon.svg" />
+    <link rel="icon" href="./img/icon.png" type="image/png" />
+    <link rel="apple-touch-icon" href="./img/icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=8" />
+    <link rel="stylesheet" href="./styles.css?v=9" />
   </head>
   <body>
     <div class="page-shell">
       <header class="hero">
         <div class="hero-brand">
-          <h1>Kapp</h1>
+          <h1>Fotialepou</h1>
         </div>
         <div class="hero-controls">
           <div class="language-switcher compact-language-switcher">
@@ -56,11 +56,16 @@
         <section class="tab-panel is-active" data-panel="intro">
           <section class="panel intro-shell">
             <div class="intro-hero">
-              <p class="panel-kicker">Intro</p>
-              <h2>Use Kapp by building one language at a time.</h2>
-              <p class="intro-copy">
-                Kapp is a tool to help you along your language-learning journey, keep track of your progress, and centralize what you learn in one place. Pick a target language, then build your own decks, grammar pages, and reading texts around it.
-              </p>
+              <div>
+                <p class="panel-kicker">Intro</p>
+                <h2>Use Fotialepou by building one language at a time.</h2>
+                <p class="intro-copy">
+                  Fotialepou is a tool to help you along your language-learning journey, keep track of your progress, and centralize what you learn in one place. Pick a target language, then build your own decks, grammar pages, and reading texts around it.
+                </p>
+              </div>
+              <div class="tab-mascot tab-mascot-intro" aria-hidden="true">
+                <img src="img/standing.png" alt="" />
+              </div>
             </div>
 
             <section class="intro-section">
@@ -146,7 +151,7 @@
                 </div>
               </div>
               <div class="study-setup-mascot" aria-hidden="true">
-                <img src="./mascot-transparent.png" alt="" />
+                <img src="img/thinking.png" alt="" />
               </div>
               <div class="study-mode-header">
                 <p class="panel-kicker">Study method</p>
@@ -263,6 +268,9 @@
                 <button class="primary" id="grammar-create-new" type="button">New grammar point</button>
               </div>
             </div>
+              <div class="tab-mascot tab-mascot-panel tab-mascot-grammar" aria-hidden="true">
+                <img src="img/speaking.png" alt="" />
+              </div>
 
             <div class="grammar-library-view" id="grammar-library-view">
               <div class="panel-header">
@@ -329,6 +337,9 @@
                 <button class="secondary" id="library-create-folder" type="button">New folder</button>
                 <button class="primary" id="library-create-new" type="button">Import text</button>
               </div>
+            </div>
+            <div class="tab-mascot tab-mascot-panel tab-mascot-library" aria-hidden="true">
+              <img src="img/reading.png" alt="" />
             </div>
 
             <div class="library-browser-view" id="library-browser-view">
@@ -545,6 +556,9 @@
                   <h2>Language overview</h2>
                 </div>
               </div>
+              <div class="tab-mascot tab-mascot-panel tab-mascot-statistics" aria-hidden="true">
+                <img src="img/celebrating.png" alt="" />
+              </div>
               <div class="chart-grid" id="language-summary-stats"></div>
               <div class="bar-chart" id="language-chart"></div>
             </section>
@@ -585,6 +599,9 @@
                 <button class="secondary hidden" id="decks-back-to-page" type="button">Back to deck</button>
                 <button class="primary" id="decks-create-new" type="button">Create deck</button>
               </div>
+            </div>
+            <div class="tab-mascot tab-mascot-panel tab-mascot-decks" aria-hidden="true">
+              <img src="img/studying.png" alt="" />
             </div>
 
             <div class="deck-library-view" id="deck-library-view">
@@ -792,20 +809,6 @@
               <button class="primary" id="import-app-data-button" type="submit">Import data</button>
             </form>
 
-            <div class="recording-panel">
-              <div class="panel-header">
-                <div>
-                  <p class="panel-kicker">Credits</p>
-                  <h2>Assets</h2>
-                </div>
-              </div>
-              <p class="field-help">
-                <a href="https://www.clipartmax.com/middle/m2i8H7d3b1A0H7H7_cute-fox-mascot-reading-mascot/" target="_blank" rel="noreferrer">
-                  Cute Fox Mascot - Reading Mascot @clipartmax.com
-                </a>
-              </p>
-            </div>
-
             <div class="recording-panel danger-panel">
               <div class="panel-header">
                 <div>
@@ -836,6 +839,6 @@
       </li>
     </template>
 
-    <script type="module" src="./app.js?v=8"></script>
+    <script type="module" src="./app.js?v=9"></script>
   </body>
 </html>

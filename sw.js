@@ -1,8 +1,8 @@
-const CACHE_NAME = "kapp-v8";
+const CACHE_NAME = "fotialepou-v9";
 const STATIC_ASSETS = [
   "./",
   "./manifest.webmanifest",
-  "./icon.svg",
+  "./img/icon.png",
 ];
 
 self.addEventListener("install", (event) => {

@@ -350,8 +350,58 @@ h2 {
 .intro-hero {
   display: grid;
   gap: 12px;
-  max-width: 54rem;
+  max-width: 62rem;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  align-items: center;
   padding-bottom: 8px;
+}
+
+.tab-mascot {
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.tab-mascot img {
+  width: min(180px, 100%);
+  max-height: 180px;
+  object-fit: contain;
+  filter: drop-shadow(0 14px 24px rgba(76, 49, 10, 0.1));
+}
+
+.tab-mascot-panel {
+  justify-self: end;
+  margin-top: -4px;
+}
+
+.tab-mascot-panel img {
+  width: min(170px, 100%);
+  max-height: 170px;
+}
+
+.tab-mascot-intro {
+  justify-self: end;
+  align-self: end;
+}
+
+.tab-mascot-intro img {
+  width: min(260px, 100%);
+  max-height: 260px;
+}
+
+.tab-mascot-library,
+.tab-mascot-grammar,
+.tab-mascot-decks {
+  justify-self: center;
+  margin-top: -32px;
+  margin-bottom: -24px;
+}
+
+.tab-mascot-library img,
+.tab-mascot-grammar img,
+.tab-mascot-decks img {
+  width: min(240px, 100%);
+  max-height: 240px;
 }
 
 .intro-copy {
@@ -617,15 +667,15 @@ h2 {
     display: grid;
     justify-items: center;
     align-items: center;
-    min-height: 180px;
-    padding: 4px 0 0;
+    min-height: 240px;
+    padding: 0;
     background: transparent;
-    padding-right: 30%;
+    padding-right: 18%;
   }
 
   .study-setup-mascot img {
-    width: min(360px, 100%);
-    max-height: 260px;
+    width: min(460px, 122%);
+    max-height: 340px;
     object-fit: contain;
     background: transparent;
     filter: drop-shadow(0 16px 28px rgba(76, 49, 10, 0.12));
@@ -2054,6 +2104,28 @@ body[data-theme="night"] .ghost {
   .intro-row {
     grid-template-columns: 1fr;
     gap: 6px;
+  }
+
+  .intro-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .tab-mascot-panel,
+  .tab-mascot-intro {
+    justify-self: center;
+  }
+
+  .tab-mascot img,
+  .tab-mascot-panel img {
+    width: min(140px, 100%);
+    max-height: 140px;
+  }
+
+  .tab-mascot-library,
+  .tab-mascot-grammar,
+  .tab-mascot-decks,
+  .tab-mascot-intro {
+    margin: 0;
   }
 
   .compact-language-switcher .add-language-form {

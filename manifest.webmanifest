@@ -1,6 +1,6 @@
 {
-  "name": "Kapp",
-  "short_name": "Kapp",
+  "name": "Fotialepou",
+  "short_name": "Fotialepou",
   "description": "Personal language learning workspace for flashcards, grammar, reading, and study progress.",
   "start_url": "./",
   "scope": "./",
@@ -9,9 +9,9 @@
   "theme_color": "#efe4cf",
   "icons": [
     {
-      "src": "./icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "./img/icon.png",
+      "sizes": "405x406",
+      "type": "image/png",
       "purpose": "any maskable"
     }
   ]

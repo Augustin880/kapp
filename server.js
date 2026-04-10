@@ -50,5 +50,5 @@ http
     sendFile(filePath, response);
   })
   .listen(PORT, () => {
-    console.log(`Kapp running at http://localhost:${PORT}`);
+    console.log(`Fotialepou running at http://localhost:${PORT}`);
   });
