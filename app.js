@@ -1262,11 +1262,12 @@ if (!isBrowserRuntime()) {
   function getStudyPriorityWeight(card) {
     const attempts = card.stats.attempts;
     const accuracy = getAccuracy(card) / 100;
+    const consecutiveCorrect = Math.max(0, card.stats.consecutiveCorrect || 0);
     const practiceGap = Math.max(0, 1 - Math.min(attempts, 20) / 20);
     const accuracyGap = 1 - accuracy;
-    const knownPenalty = isKnownCard(card) ? 0.08 : 1;
+    const streakPenalty = Math.max(0.04, 1 / (1 + consecutiveCorrect * 0.85));
 
-    return (1 + practiceGap * 4 + accuracyGap * 6) * knownPenalty;
+    return (1 + practiceGap * 4 + accuracyGap * 6) * streakPenalty;
   }
 
   function weightedShuffleCards(cards) {
