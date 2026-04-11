@@ -620,6 +620,7 @@ if (!isBrowserRuntime()) {
     studyAnsweredCardId: "",
     typingAnswerPendingCardId: "",
     pendingTypingReviewCardId: "",
+    pendingTypingPreviousStreak: 0,
     submittedTypingAnswers: [],
     submittedTypingCorrect: false,
     submittedMultipleChoiceAnswer: "",
@@ -1364,6 +1365,7 @@ if (!isBrowserRuntime()) {
     state.studyAnsweredCardId = "";
     state.typingAnswerPendingCardId = "";
     state.pendingTypingReviewCardId = "";
+    state.pendingTypingPreviousStreak = 0;
     state.submittedTypingAnswers = [];
     state.submittedTypingCorrect = false;
     state.submittedMultipleChoiceAnswer = "";
@@ -1385,6 +1387,7 @@ if (!isBrowserRuntime()) {
 
     registerSessionReview(state.pendingTypingReviewCardId, isCorrect);
     state.pendingTypingReviewCardId = "";
+    state.pendingTypingPreviousStreak = 0;
   }
 
   function resetSession() {
@@ -2973,9 +2976,9 @@ if (!isBrowserRuntime()) {
       ? cardRows
           .map(
             (card) => `
-              <div class="mini-row">
+              <div class="mini-row ${isKnownCard(card) ? "is-known" : ""}">
                 <strong>${renderHighlightedText(card.prompt)}</strong>
-                <span>${card.deck} · ${card.stats.attempts} practices · ${getAccuracy(card)}% correct</span>
+                <span>${card.deck} · ${card.stats.attempts} practices · ${getAccuracy(card)}% correct${isKnownCard(card) ? " · Known" : ""}</span>
               </div>
             `,
           )
@@ -4345,6 +4348,7 @@ if (!isBrowserRuntime()) {
       expectedHighlights.length > 0
         ? typedBlankInputs.map((input) => input.value).join(" ")
         : new FormData(event.currentTarget).get("typingAnswer").toString();
+    const previousConsecutiveCorrect = currentCard.stats.consecutiveCorrect || 0;
     const isCorrect =
       expectedHighlights.length > 0
         ? expectedHighlights.length === typedBlankInputs.length &&
@@ -4355,6 +4359,7 @@ if (!isBrowserRuntime()) {
       registerSessionReview(currentCard.id, true);
     } else {
       state.pendingTypingReviewCardId = currentCard.id;
+      state.pendingTypingPreviousStreak = previousConsecutiveCorrect;
     }
     persistFlashcards();
     state.studyAnsweredCardId = currentCard.id;
@@ -4386,6 +4391,7 @@ if (!isBrowserRuntime()) {
     }
 
     targetCard.stats.correct += 1;
+    targetCard.stats.consecutiveCorrect = (state.pendingTypingPreviousStreak || 0) + 1;
     finalizePendingTypingReview(true);
     persistFlashcards();
     state.submittedTypingCorrect = true;
